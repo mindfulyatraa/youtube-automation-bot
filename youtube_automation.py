@@ -63,27 +63,27 @@ def is_already_processed(video_id, history):
 
 # ==================== VIRAL TITLE & DESCRIPTION GENERATOR ====================
 def generate_viral_title(original_title, clip_number):
-    """Viral title generate karta hai"""
+    """Viral title generate karta hai (Indian Audience ke liye)"""
     
-    # Viral keywords
-    viral_words = [
-        "🔥", "💯", "🚨", "⚡", "😱", 
-        "SHOCKING", "INSANE", "VIRAL", "MUST WATCH", 
-        "WOW", "MIND BLOWING", "CRAZY", "UNBELIEVABLE"
-    ]
+    # Viral keywords (Hinglish + English)
+    keywords = ["GALAT SCENE", "EXPOSED", "SHOCKING", "SACH AAGYA BAHAR", "VIRAL HAI", "MUST WATCH", "DARK REALITY"]
+    random_keyword = random.choice(keywords)
     
     # Title se important keywords nikalo
     words = re.findall(r'\b\w+\b', original_title)
-    important_words = [w for w in words if len(w) > 4][:3]
+    important_words = [w for w in words if len(w) > 4][:2]
+    topic = ' '.join(important_words).upper() if important_words else "VIRAL VIDEO"
     
-    # Different viral title patterns
+    # Clickbait Patterns
     patterns = [
-        f"🔥 {' '.join(important_words[:2]).upper()} | Viral Moment #{clip_number}",
-        f"😱 SHOCKING: {' '.join(important_words[:2])} | Must Watch",
-        f"⚡ {important_words[0] if important_words else 'VIRAL'} Moment That Broke Internet 🚨",
-        f"💯 This {important_words[0] if important_words else 'Video'} Went VIRAL! #{clip_number}",
-        f"🚨 You Won't Believe This: {' '.join(important_words[:2])}",
-        f"INSANE {important_words[0] if important_words else 'Moment'} 🔥 | Viral Short"
+        f"😱 {topic} - {random_keyword} ‼️",
+        f"🔥 Truth About {topic} 🤯",
+        f"Real Face of {topic} 😡 | Viral Clip",
+        f"Don't Watch Alone ❌ | {topic} Viral",
+        f"Wait For End 🤣 | {topic} Funny",
+        f"Yeh Kya Bol Diya? 😱 {topic} | #shorts",
+        f"India's Best Podcast Moment 🔥 | {topic}",
+        f"{random_keyword} ‼️ {topic} Podcast"
     ]
     
     # Random pattern select karo
@@ -96,96 +96,58 @@ def generate_viral_title(original_title, clip_number):
     return title
 
 def generate_viral_description(original_title, views, video_url):
-    """Viral description generate karta hai"""
+    """Viral description generate karta hai (Credit + Keywords)"""
     
-    description_templates = [
-        f"""🔥 THIS WENT VIRAL! 🔥
+    base_description = f"""🔥 VIRAL INDIAN PODCAST MOMENT 🇮🇳
 
-From a video with {views:,} views! This moment broke the internet 💯
+Original Video Views: {views:,} 🚀
+Everyone is sharing this! Watch till the end for the twist.
 
-Original video has millions of views and this is the BEST part! 
+Credit: This clip is taken from a longer video. 
+Full Video Link: {video_url}
+(All rights belong to the original creator. This is a fan edit for entertainment/educational purposes.)
 
-Watch till the end! ⚡
+👇 KEYWORDS FOR RANKING:
+Indian Podcast, Hindi Podcast, Viral Clips, Podcast Highlights, Best Moments, 
+Trending India, Shorts India, YT Shorts, Funny Podcast, Serious Discussion, 
+Ranveer Allahbadia, Raj Shamani, Dostcast, Real Hit, Bharti Singh,
+Motivation, Inspiration, Dark Truth, Reality Check, Exposed.
 
-🎯 Follow for more viral content!
-👍 Like if you enjoyed!
-💬 Comment your thoughts!
-🔔 Turn on notifications!
-
-Full video: {video_url}
-
-""",
-        f"""😱 MIND = BLOWN 😱
-
-This clip is from a MEGA VIRAL video ({views:,} views)!
-
-Everyone is talking about this moment! 🚨
-
-If you're not watching this, you're missing out! 💯
-
-👉 FOLLOW for daily viral content
-❤️ LIKE if this amazed you
-💭 COMMENT what you think
-🔔 TURN ON notifications
-
-Source: {video_url}
-
-""",
-        f"""⚡ VIRAL ALERT ⚡
-
-{views:,} views and counting! This is THE moment everyone's sharing 🔥
-
-You NEED to see this! 💯
-
-Hit that LIKE button if you loved it! 👍
-FOLLOW for more viral shorts! 🚀
-COMMENT your reaction! 💬
-
-Full version: {video_url}
-
+#Shorts #Viral #India #Podcast #Trending #Explore #FYP #Hindi #Video
 """
-    ]
-    
-    base_description = random.choice(description_templates)
-    
-    # Hashtags add karo
-    hashtags = """
-#Shorts #Viral #Trending #MustWatch #Viral2025 #ViralVideo #YouTubeShorts 
-#Trending2025 #Amazing #Unbelievable #MindBlowing #Epic #BestMoments 
-#ViralShorts #TrendingShorts #ExplorePage #ForYou #FYP #Wow #Insane
-"""
-    
-    return base_description + hashtags
+    return base_description
 
 def generate_viral_tags():
-    """Viral tags generate karta hai (500 character limit)"""
+    """Viral tags generate karta hai (Max 50 tags, within 500 chars)"""
     
-    tags = [
-        # Core shorts tags
-        "shorts", "viral", "trending", "youtube shorts", "viral shorts",
-        "trending shorts", "viral video", "trending video",
-        
-        # Engagement tags  
-        "must watch", "mind blowing", "shocking", "amazing", "unbelievable",
-        "insane", "epic", "wow", "crazy", "best moments",
-        
-        # Year specific
-        "2025", "viral 2025", "trending 2025", "best of 2025",
-        
-        # USA audience
-        "usa", "america", "us trending", "us viral",
-        
-        # General viral
-        "viral content", "viral clips", "trending now", "going viral",
-        "internet breaking", "everyone watching", "must see",
-        
-        # Algorithm friendly
-        "for you", "fyp", "explore", "recommended", "suggested"
+    all_tags = [
+        "shorts", "viral", "trending", "india", "indian podcast", "hindi podcast",
+        "podcast clips", "best moments", "funny shorts", "emotional", "motivation",
+        "inspiration", "reality", "truth", "exposed", "dark side", "ranveer allahbadia",
+        "beerbiceps", "raj shamani", "dostcast", "shubhankar mishra", "real hit",
+        "bharti singh", "unfilter", "samay raina", "tanmay bhat", "carryminati",
+        "trending shorts", "viral shorts", "yt shorts", "shorts feed", "algorithm",
+        "new video", "2026", "latest", "update", "news", "controversy",
+        "sandeep maheshwari", "ankur warikoo", "finance", "business", "comedy",
+        "standup", "munawar faruqui", "biggboss", "elvish yadav", "fukra insaan",
+        "dhruv rathee", "abhishek upmanyu"
     ]
     
-    # Shuffle and return (YouTube accepts up to 500 chars total)
-    random.shuffle(tags)
-    return tags[:30]  # Top 30 tags
+    # Shuffle and select
+    random.shuffle(all_tags)
+    
+    # 500 characters limit check
+    final_tags = []
+    current_length = 0
+    
+    for tag in all_tags:
+        if current_length + len(tag) + 1 < 480: # Safety margin
+            final_tags.append(tag)
+            current_length += len(tag) + 1
+        else:
+            break
+            
+    return final_tags
 
 # ==================== STEP 1: FIND VIRAL VIDEOS ====================
 def find_viral_videos(query="podcast highlights", max_results=5, history=None):
@@ -204,8 +166,8 @@ def find_viral_videos(query="podcast highlights", max_results=5, history=None):
         order="viewCount",
         publishedAfter=published_after,
         maxResults=max_results * 2,  # Extra fetch karo filtering ke liye
-        regionCode="US",
-        relevanceLanguage="en"
+        regionCode="IN", # Changed to IN for India
+        relevanceLanguage="hi" # Prefer Hindi content
     )
     
     response = request.execute()
