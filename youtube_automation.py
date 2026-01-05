@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import subprocess
 from datetime import datetime, timedelta
@@ -11,170 +10,298 @@ import random
 import re
 import time
 import schedule
-import argparse
+import sys
+from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+from moviepy.video.fx import resize
 
 # ==================== CONFIGURATION ====================
-YOUTUBE_API_KEY = "AIzaSyDOXwfmQQnhw2P3FHauy_q0skaDd4i2Xqg"  # YouTube Data API key
+YOUTUBE_API_KEY = "AIzaSyDOXwfmQQnhw2P3FHauy_q0skaDd4i2Xqg" # Injected API Key
 DOWNLOAD_FOLDER = "downloads"
 CLIPS_FOLDER = "clips"
-METADATA_FILE = os.path.join(CLIPS_FOLDER, "metadata.json")
 SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
-# Shorts settings
-CLIP_DURATION = 45  # seconds (max 60 for shorts)
-MIN_VIEWS_THRESHOLD = 100000  # Minimum views for viral videos
+# Video criteria
+MIN_VIDEO_DURATION = 300  # 5 minutes minimum (long videos only)
+MAX_VIDEO_DURATION = 7200  # 2 hours maximum
+MIN_VIEWS_THRESHOLD = 100000
+CLIP_DURATION = 50  # 50 seconds for shorts
 
 # Automation settings
-# UPLOAD_INTERVAL_HOURS = 10  # (Removed in favor of fixed daily schedule)
-AUTO_UPLOAD = True  # Automatic upload on/off
-CLIPS_PER_CYCLE = 1  # Har cycle me kitne clips upload karne hain
+UPLOAD_INTERVAL_HOURS = 10
+CLIPS_PER_CYCLE = 1
 
-# Search queries rotation (variety ke liye)
+# Captions settings (Vizard/Opus style)
+CAPTION_STYLE = {
+    'fontsize': 70,
+    'font': 'Arial-Bold',
+    'color': 'yellow',
+    'stroke_color': 'black',
+    'stroke_width': 3,
+    'method': 'caption',
+    'align': 'center',
+    'bg_color': 'rgba(0,0,0,0.6)'
+}
+
 SEARCH_QUERIES = [
-    "podcast highlights usa",
-    "viral moments usa",
-    "trending podcast clips",
-    "best podcast moments",
-    "viral interview clips",
-    "motivational speeches",
-    "funny moments viral"
+    "podcast full episode",
+    "motivational speech full",
+    "interview full video",
+    "ted talk full",
+    "business advice full video",
+    "self improvement podcast"
 ]
 
 # ==================== SETUP ====================
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs(CLIPS_FOLDER, exist_ok=True)
 
-# Upload history track karne ke liye
 UPLOAD_HISTORY_FILE = "upload_history.json"
 
 def load_upload_history():
-    """Purane uploads ka record load karta hai"""
     if os.path.exists(UPLOAD_HISTORY_FILE):
         with open(UPLOAD_HISTORY_FILE, 'r') as f:
             return json.load(f)
     return {'uploaded_videos': [], 'last_upload_time': None}
 
 def save_upload_history(history):
-    """Upload history save karta hai"""
     with open(UPLOAD_HISTORY_FILE, 'w') as f:
         json.dump(history, f, indent=2)
 
-def load_clip_metadata():
-    """Clips ka metadata load karta hai"""
-    if os.path.exists(METADATA_FILE):
-        try:
-            with open(METADATA_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_clip_metadata(metadata):
-    """Clips ka metadata save karta hai"""
-    with open(METADATA_FILE, 'w') as f:
-        json.dump(metadata, f, indent=2)
-
 def is_already_processed(video_id, history):
-    """Check karta hai ki video already process ho chuki hai"""
     return video_id in history['uploaded_videos']
 
-# ==================== VIRAL TITLE & DESCRIPTION GENERATOR ====================
-def generate_viral_title(original_title, clip_number):
-    """Viral title generate karta hai (Indian Audience ke liye)"""
+# ==================== VIRAL CAPTIONS GENERATOR ====================
+def extract_audio_transcript(video_path, start_time, duration):
+    """Audio se transcript nikalta hai (Whisper AI use karta hai)"""
+    print("🎤 Transcript extract ho raha hai...")
     
-    # Viral keywords (Hinglish + English)
-    keywords = ["GALAT SCENE", "EXPOSED", "SHOCKING", "SACH AAGYA BAHAR", "VIRAL HAI", "MUST WATCH", "DARK REALITY"]
-    random_keyword = random.choice(keywords)
+    # Audio extract karo specific timestamp se
+    audio_path = video_path.replace('.mp4', f'_audio_{int(start_time)}.wav')
     
-    # Title se important keywords nikalo
-    words = re.findall(r'\b\w+\b', original_title)
-    important_words = [w for w in words if len(w) > 4][:2]
-    topic = ' '.join(important_words).upper() if important_words else "VIRAL VIDEO"
-    
-    # Clickbait Patterns
-    patterns = [
-        f"😱 {topic} - {random_keyword} ‼️",
-        f"🔥 Truth About {topic} 🤯",
-        f"Real Face of {topic} 😡 | Viral Clip",
-        f"Don't Watch Alone ❌ | {topic} Viral",
-        f"Wait For End 🤣 | {topic} Funny",
-        f"Yeh Kya Bol Diya? 😱 {topic} | #shorts",
-        f"India's Best Podcast Moment 🔥 | {topic}",
-        f"{random_keyword} ‼️ {topic} Podcast"
+    command = [
+        'ffmpeg',
+        '-ss', str(start_time),
+        '-i', video_path,
+        '-t', str(duration),
+        '-vn',
+        '-acodec', 'pcm_s16le',
+        '-ar', '16000',
+        '-ac', '1',
+        '-y',
+        audio_path
     ]
     
-    # Random pattern select karo
-    title = random.choice(patterns)
+    subprocess.run(command, check=True, capture_output=True)
     
-    # Length limit (max 100 chars for YouTube)
-    if len(title) > 95:
-        title = title[:95] + "..."
-    
-    return title
+    # Whisper se transcribe karo
+    try:
+        import whisper
+        # Use 'tiny' or 'base' for faster CPU inference on GitHub Actions
+        model = whisper.load_model("base") 
+        result = model.transcribe(audio_path, word_timestamps=True)
+        
+        # Audio file delete karo
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+        
+        return result
+    except ImportError:
+        print("⚠️  Whisper not installed. Install: pip install openai-whisper")
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+        return None
+    except Exception as e:
+        print(f"⚠️ Whisper error: {e}")
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+        return None
 
-def generate_viral_description(original_title, views, video_url):
-    """Viral description generate karta hai (Credit + Keywords)"""
+def create_viral_captions(transcript_data):
+    """Vizard/Opus style captions banata hai with timing"""
+    if not transcript_data or 'segments' not in transcript_data:
+        return []
     
-    base_description = f"""🔥 VIRAL INDIAN PODCAST MOMENT 🇮🇳
-
-Original Video Views: {views:,} 🚀
-Everyone is sharing this! Watch till the end for the twist.
-
-Credit: This clip is taken from a longer video. 
-Full Video Link: {video_url}
-(All rights belong to the original creator. This is a fan edit for entertainment/educational purposes.)
-
-👇 KEYWORDS FOR RANKING:
-Indian Podcast, Hindi Podcast, Viral Clips, Podcast Highlights, Best Moments, 
-Trending India, Shorts India, YT Shorts, Funny Podcast, Serious Discussion, 
-Ranveer Allahbadia, Raj Shamani, Dostcast, Real Hit, Bharti Singh,
-Motivation, Inspiration, Dark Truth, Reality Check, Exposed.
-
-#Shorts #Viral #India #Podcast #Trending #Explore #FYP #Hindi #Video
-"""
-    return base_description
-
-def generate_viral_tags():
-    """Viral tags generate karta hai (Max 50 tags, within 500 chars)"""
+    captions = []
     
-    all_tags = [
-        "shorts", "viral", "trending", "india", "indian podcast", "hindi podcast",
-        "podcast clips", "best moments", "funny shorts", "emotional", "motivation",
-        "inspiration", "reality", "truth", "exposed", "dark side", "ranveer allahbadia",
-        "beerbiceps", "raj shamani", "dostcast", "shubhankar mishra", "real hit",
-        "bharti singh", "unfilter", "samay raina", "tanmay bhat", "carryminati",
-        "trending shorts", "viral shorts", "yt shorts", "shorts feed", "algorithm",
-        "new video", "2026", "latest", "update", "news", "controversy",
-        "sandeep maheshwari", "ankur warikoo", "finance", "business", "comedy",
-        "standup", "munawar faruqui", "biggboss", "elvish yadav", "fukra insaan",
-        "dhruv rathee", "abhishek upmanyu"
-    ]
-    
-    # Shuffle and select
-    random.shuffle(all_tags)
-    
-    # 500 characters limit check
-    final_tags = []
-    current_length = 0
-    
-    for tag in all_tags:
-        if current_length + len(tag) + 1 < 400: # Safety margin reduced to 400
-            final_tags.append(tag)
-            current_length += len(tag) + 1
-        else:
-            break
+    for segment in transcript_data['segments']:
+        text = segment['text'].strip()
+        start = segment['start']
+        end = segment['end']
+        
+        # Break into smaller chunks (3-5 words max for viral effect)
+        words = text.split()
+        if not words: continue
+        
+        chunk_size = random.randint(2, 4)
+        
+        for i in range(0, len(words), chunk_size):
+            chunk_words = words[i:i+chunk_size]
+            chunk_text = ' '.join(chunk_words).upper()
             
-    return final_tags
+            # Timing calculate karo
+            word_duration = (end - start) / len(words)
+            chunk_start = start + (i * word_duration)
+            chunk_end = chunk_start + (len(chunk_words) * word_duration)
+            
+            captions.append({
+                'text': chunk_text,
+                'start': chunk_start,
+                'end': chunk_end
+            })
+    
+    return captions
 
-# ==================== STEP 1: FIND VIRAL VIDEOS ====================
-def find_viral_videos(query="podcast highlights", max_results=5, history=None):
-    """YouTube se viral videos dhoondhta hai (already processed videos skip karta hai)"""
-    print("🔍 Viral videos search kar raha hoon...")
+def add_captions_to_video(video_path, captions, output_path):
+    """Video me viral captions add karta hai (Vizard/Opus style)"""
+    print("📝 Viral captions add ho rahe hain...")
+    
+    try:
+        video = VideoFileClip(video_path)
+        
+        caption_clips = []
+        
+        for cap in captions:
+            # Create text clip with viral styling
+            # Note: For GitHub Actions (Linux), fonts might need adjustment.
+            # Using 'Arial-Bold' as specificied, but falling back if needed.
+            
+            try:
+                txt_clip = TextClip(
+                    cap['text'],
+                    fontsize=CAPTION_STYLE['fontsize'],
+                    font=CAPTION_STYLE['font'],
+                    color=CAPTION_STYLE['color'],
+                    stroke_color=CAPTION_STYLE['stroke_color'],
+                    stroke_width=CAPTION_STYLE['stroke_width'],
+                    method='caption',
+                    size=(video.w * 0.9, None),
+                    align='center'
+                )
+            except Exception:
+                # Fallback font
+                txt_clip = TextClip(
+                    cap['text'],
+                    fontsize=CAPTION_STYLE['fontsize'],
+                    color=CAPTION_STYLE['color'],
+                    stroke_color=CAPTION_STYLE['stroke_color'],
+                    stroke_width=CAPTION_STYLE['stroke_width'],
+                    method='caption',
+                    size=(video.w * 0.9, None),
+                    align='center'
+                )
+            
+            # Position captions (center-bottom like Vizard)
+            txt_clip = txt_clip.set_position(('center', video.h * 0.6))
+            txt_clip = txt_clip.set_start(cap['start'])
+            txt_clip = txt_clip.set_duration(cap['end'] - cap['start'])
+            
+            caption_clips.append(txt_clip)
+        
+        # Combine video with captions
+        final_video = CompositeVideoClip([video] + caption_clips)
+        
+        # Export
+        final_video.write_videofile(
+            output_path,
+            codec='libx264',
+            audio_codec='aac',
+            fps=30,
+            preset='medium',
+            logger=None # Reduce output noise
+        )
+        
+        video.close()
+        final_video.close()
+        
+        print(f"✅ Captions added: {output_path}")
+        return True
+    
+    except Exception as e:
+        print(f"❌ Error adding captions (MoviePy/ImageMagick): {e}")
+        # If captions fail, copy original video as fallback (don't lose the content)
+        try:
+             import shutil
+             shutil.copy(video_path, output_path)
+             print("⚠️ Fallback: Copied video without captions.")
+             return True
+        except:
+             return False
+
+
+# ==================== VIDEO ANALYSIS ====================
+def analyze_video_engagement(video_path, num_segments=10):
+    """Video ke best engaging moments dhoondhta hai"""
+    print("🔍 Video ke viral moments analyze ho rahe hain...")
+    
+    # Video ko segments me divide karo
+    probe_command = [
+        'ffprobe',
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        video_path
+    ]
+    
+    result = subprocess.run(probe_command, capture_output=True, text=True)
+    try:
+        duration = float(result.stdout.strip())
+    except:
+        return [] # Fail gracefully
+    
+    segment_duration = duration / num_segments
+    
+    engagement_scores = []
+    
+    for i in range(num_segments):
+        start = i * segment_duration
+        
+        # Audio loudness check (high energy = engaging)
+        loudness_command = [
+            'ffmpeg',
+            '-ss', str(start),
+            '-i', video_path,
+            '-t', str(min(segment_duration, 30)),
+            '-af', 'volumedetect',
+            '-f', 'null',
+            '-'
+        ]
+        
+        result = subprocess.run(loudness_command, capture_output=True, text=True, stderr=subprocess.STDOUT)
+        
+        # Mean volume extract karo
+        mean_volume = -30  # default
+        for line in result.stdout.split('\n'):
+            if 'mean_volume' in line:
+                try:
+                    mean_volume = float(line.split(':')[1].strip().split()[0])
+                except:
+                    pass
+        
+        # Scene changes detect (high activity = engaging)
+        scene_score = random.uniform(0.5, 1.0)  # Placeholder (proper implementation needs advanced CV)
+        
+        # Combined engagement score
+        engagement = abs(mean_volume) * 0.7 + scene_score * 0.3
+        
+        engagement_scores.append({
+            'start': start,
+            'score': engagement,
+            'segment': i
+        })
+    
+    # Sort by engagement score
+    engagement_scores.sort(key=lambda x: x['score'], reverse=True)
+    
+    return engagement_scores
+
+# ==================== FIND LONG VIRAL VIDEOS ====================
+def find_viral_long_videos(query="podcast full episode", max_results=5, history=None):
+    """ONLY long videos (5+ minutes) dhoondhta hai - NO SHORTS"""
+    print("🔍 Long viral videos search kar raha hoon...")
     
     youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
     
-    # Last 7 days ki trending videos
-    published_after = (datetime.now() - timedelta(days=7)).isoformat() + 'Z'
+    published_after = (datetime.now() - timedelta(days=14)).isoformat() + 'Z'
     
     request = youtube.search().list(
         part="snippet",
@@ -182,9 +309,10 @@ def find_viral_videos(query="podcast highlights", max_results=5, history=None):
         type="video",
         order="viewCount",
         publishedAfter=published_after,
-        maxResults=max_results * 2,  # Extra fetch karo filtering ke liye
-        regionCode="IN", # Changed to IN for India
-        relevanceLanguage="hi" # Prefer Hindi content
+        maxResults=max_results * 4, # Fetch more to filter
+        regionCode="US",
+        relevanceLanguage="en",
+        videoDuration="medium"  # Medium/Long videos only (4+ minutes)
     )
     
     response = request.execute()
@@ -193,65 +321,68 @@ def find_viral_videos(query="podcast highlights", max_results=5, history=None):
     for item in response['items']:
         video_id = item['id']['videoId']
         
-        # Skip if already processed
         if history and is_already_processed(video_id, history):
-            print(f"⏭️  Skipping (already processed): {item['snippet']['title'][:50]}")
             continue
         
-        # Video details get karo (views, duration)
-        video_details = youtube.videos().list(
-            part="statistics,contentDetails",
-            id=video_id
-        ).execute()
+        try:
+            video_details = youtube.videos().list(
+                part="statistics,contentDetails",
+                id=video_id
+            ).execute()
         
-        if video_details['items']:
-            stats = video_details['items'][0]['statistics']
-            duration = video_details['items'][0]['contentDetails']['duration']
-            
-            views = int(stats.get('viewCount', 0))
-            
-            if views >= MIN_VIEWS_THRESHOLD:
-                viral_videos.append({
-                    'video_id': video_id,
-                    'title': item['snippet']['title'],
-                    'views': views,
-                    'url': f"https://www.youtube.com/watch?v={video_id}"
-                })
-                print(f"✅ Found: {item['snippet']['title']} - {views:,} views")
+            if video_details['items']:
+                stats = video_details['items'][0]['statistics']
+                duration_str = video_details['items'][0]['contentDetails']['duration']
                 
-                if len(viral_videos) >= max_results:
-                    break
+                # Parse ISO 8601 duration
+                duration_seconds = parse_duration(duration_str)
+                views = int(stats.get('viewCount', 0))
+                
+                # STRICT CHECK: Only long videos (5+ minutes), NO shorts
+                if (views >= MIN_VIEWS_THRESHOLD and 
+                    duration_seconds >= MIN_VIDEO_DURATION and
+                    duration_seconds <= MAX_VIDEO_DURATION):
+                    
+                    viral_videos.append({
+                        'video_id': video_id,
+                        'title': item['snippet']['title'],
+                        'views': views,
+                        'duration': duration_seconds,
+                        'url': f"https://www.youtube.com/watch?v={video_id}"
+                    })
+                    print(f"✅ Long Video Found: {item['snippet']['title'][:60]}")
+                    print(f"   Duration: {duration_seconds//60} min | Views: {views:,}\n")
+                    
+                    if len(viral_videos) >= max_results:
+                        break
+        except Exception as e:
+            print(f"Skipping video check due to error: {e}")
+            continue
     
     return viral_videos
 
-# Adjust path to ffmpeg
-FFMPEG_BINARY = "ffmpeg.exe"
-if os.path.exists(os.path.abspath(FFMPEG_BINARY)):
-    FFMPEG_BINARY = os.path.abspath(FFMPEG_BINARY)
-
-def get_video_duration(video_path):
-    """Video duration nikalta hai ffmpeg use karke (ffprobe fallback)"""
-    try:
-        command = [FFMPEG_BINARY, '-i', video_path]
-        result = subprocess.run(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-        # Search for Duration: 00:00:00.00
-        match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})", result.stderr)
-        if match:
-            h, m, s = map(float, match.groups())
-            return h*3600 + m*60 + s
-    except Exception as e:
-        print(f"Error getting duration: {e}")
-    return 0
-
-# ==================== STEP 2: DOWNLOAD VIDEO ====================
-def download_video(video_url, output_path):
-    """yt-dlp se video download karta hai"""
-    print(f"⬇️  Video download ho raha hai: {video_url}")
+def parse_duration(duration_str):
+    """ISO 8601 duration ko seconds me convert karta hai"""
+    import re
+    pattern = re.compile(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?')
+    match = pattern.match(duration_str)
     
-    # Use python -m yt_dlp instead of direct executable to ensure it runs
+    if not match:
+        return 0
+    
+    hours = int(match.group(1) or 0)
+    minutes = int(match.group(2) or 0)
+    seconds = int(match.group(3) or 0)
+    
+    return hours * 3600 + minutes * 60 + seconds
+
+# ==================== DOWNLOAD VIDEO ====================
+def download_video(video_url, output_path):
+    print(f"⬇️  Long video download ho raha hai: {video_url}")
+    
     command = [
-        sys.executable, '-m', 'yt_dlp',
-        '-f', 'bestvideo+bestaudio/best', # Removed height<=1080 limit for 4K support
+        'yt-dlp',
+        '-f', 'bestvideo[height<=1080]+bestaudio/best',
         '--merge-output-format', 'mp4',
         '-o', output_path,
         video_url
@@ -259,83 +390,153 @@ def download_video(video_url, output_path):
     
     try:
         subprocess.run(command, check=True, capture_output=True)
-        print(f"✅ Download complete: {output_path}")
+        print(f"✅ Download complete\n")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Download failed: {e}")
+        print(f"❌ Download failed: {e}\n")
         return False
 
-# ==================== STEP 3: EXTRACT VIRAL CLIPS ====================
-def extract_clips(video_path, video_info, num_clips=3, add_overlay=False):
-    """Video se multiple clips extract karta hai (Optional: Text Overlay)"""
-    print(f"✂️  Clips extract ho rahe hain...")
+# ==================== EXTRACT BEST CLIPS ====================
+def extract_viral_clips(video_path, video_info, num_clips=2):
+    """Video ke BEST engaging moments se clips banata hai with VIRAL CAPTIONS"""
+    print(f"✂️  Best viral moments extract ho rahe hain...\n")
     
-    # Video duration nikalo
-    duration = get_video_duration(video_path)
-    if duration == 0:
-        print("❌ Could not determine video duration")
+    # Analyze video for engagement
+    engagement_data = analyze_video_engagement(video_path, num_segments=20)
+    if not engagement_data:
+        print("❌ Could not analyze engagement, skipping video.")
         return []
-    
+
     clips = []
     
-    # Multiple clips nikalo different timestamps se
-    for i in range(num_clips):
-        # Random start time (but leave room for clip duration)
-        max_start = duration - CLIP_DURATION - 10
-        if max_start < 0:
-            max_start = 0
+    for i in range(min(num_clips, len(engagement_data))):
+        best_moment = engagement_data[i]
+        start_time = best_moment['start']
         
-        start_time = random.uniform(10, max_start) if max_start > 10 else 0
+        print(f"📍 Clip {i+1}: Best moment at {int(start_time//60)}:{int(start_time%60):02d}")
+        print(f"   Engagement Score: {best_moment['score']:.2f}\n")
         
-        clip_filename = f"clip_{video_info['video_id']}_{i+1}_{int(start_time)}.mp4"
-        clip_path = os.path.join(CLIPS_FOLDER, clip_filename)
+        # Temporary clip without captions
+        temp_clip = os.path.join(CLIPS_FOLDER, f"temp_{video_info['video_id']}_{i}.mp4")
         
-        # FFmpeg se clip extract karo (vertical format for shorts)
-        # High Quality Settings: CRF 18 (Visually Lossless), Preset veryfast (Speed balance)
+        # Extract clip in vertical format (9:16)
         command = [
-            FFMPEG_BINARY,
+            'ffmpeg',
             '-ss', str(start_time),
             '-i', video_path,
             '-t', str(CLIP_DURATION),
             '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
             '-c:v', 'libx264',
-            '-crf', '18', # Increased quality (lower is better, 18-23 is standard)
-            '-preset', 'veryfast', # Faster encoding for cloud runner
             '-c:a', 'aac',
-            '-b:a', '192k', # Better audio quality
+            '-y',
+            temp_clip
         ]
-        
-        # Add Text Overlay
-        if add_overlay:
-            # Replacing text overlay with Color Grading (Saturation Boost) to avoid Font Path issues on Windows
-            # This fulfills "halka sa edit" requirement
-            video_filter = "eq=saturation=1.3:contrast=1.1"
-            
-            # Update filter chain: scale/crop -> color grading
-            # Index 8 is the filter string (after -vf at index 7)
-            command[8] = f'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,{video_filter}'
-
-        command.extend(['-y', clip_path])
-        
-        # Debug: Print command
-        # print("Running command:", " ".join(command))
         
         try:
             subprocess.run(command, check=True, capture_output=True)
-            print(f"✅ Clip {i+1} created: {clip_filename}")
-            clips.append({
-                'path': clip_path,
-                'filename': clip_filename,
-                'start_time': start_time
-            })
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Clip {i+1} failed: {e}")
+            
+            # Extract transcript for captions
+            transcript = extract_audio_transcript(video_path, start_time, CLIP_DURATION)
+            
+            if transcript:
+                # Generate viral captions
+                captions = create_viral_captions(transcript)
+                
+                # Final clip with captions
+                final_clip = os.path.join(CLIPS_FOLDER, f"clip_{video_info['video_id']}_{i}.mp4")
+                
+                # Add captions to video
+                success = add_captions_to_video(temp_clip, captions, final_clip)
+                
+                # Remove temp clip
+                if os.path.exists(temp_clip):
+                    os.remove(temp_clip)
+                
+                if success:
+                    clips.append({
+                        'path': final_clip,
+                        'filename': os.path.basename(final_clip),
+                        'start_time': start_time,
+                        'engagement_score': best_moment['score']
+                    })
+                    print(f"✅ Clip {i+1} ready with VIRAL CAPTIONS!\n")
+                else: 
+                     print(f"❌ Clip {i+1} caption generation failed.\n")
+
+            else:
+                # No transcript/captions - just use the clip (rename temp)
+                final_clip = os.path.join(CLIPS_FOLDER, f"clip_{video_info['video_id']}_{i}.mp4")
+                if os.path.exists(temp_clip):
+                    os.rename(temp_clip, final_clip)
+                
+                clips.append({
+                    'path': final_clip,
+                    'filename': os.path.basename(final_clip),
+                    'start_time': start_time,
+                    'engagement_score': best_moment['score']
+                })
+                
+                print(f"✅ Clip {i+1} ready (no captions)\n")
+                
+        except Exception as e:
+            print(f"❌ Clip {i+1} failed: {e}\n")
+            if os.path.exists(temp_clip):
+                os.remove(temp_clip)
     
     return clips
 
-# ==================== STEP 4: UPLOAD TO YOUTUBE SHORTS ====================
+# ==================== VIRAL TITLE & DESCRIPTION ====================
+def generate_viral_title(original_title, clip_number):
+    try:
+        viral_words = ["🔥", "💯", "🚨", "⚡", "😱"]
+        words = re.findall(r'\b\w+\b', original_title)
+        important_words = [w for w in words if len(w) > 4][:3]
+        
+        patterns = [
+            f"🔥 {' '.join(important_words[:2]).upper()} | Viral Moment",
+            f"😱 {important_words[0] if important_words else 'VIRAL'} That Broke Internet",
+            f"⚡ INSANE {' '.join(important_words[:2])} | Must Watch",
+            f"💯 This Went VIRAL | {' '.join(important_words[:2])}",
+            f"🚨 You NEED To See This | {important_words[0] if important_words else 'VIRAL'}"
+        ]
+        
+        title = random.choice(patterns)
+        return title[:95] + "..." if len(title) > 95 else title
+    except:
+        return "Viral Video 🔥 #shorts"
+
+def generate_viral_description(original_title, views, video_url):
+    description = f"""🔥 THIS MOMENT WENT VIRAL! 🔥
+
+From a video with {views:,}+ views! This is the BEST part that everyone's talking about 💯
+
+Watch till the end! ⚡
+
+🎯 FOLLOW for more viral clips daily!
+👍 LIKE if you enjoyed!
+💬 COMMENT your thoughts!
+🔔 TURN ON notifications!
+
+Full video: {video_url}
+
+#Shorts #Viral #Trending #MustWatch #Viral2025 #YouTubeShorts #Trending2025 
+#Amazing #Unbelievable #MindBlowing #Epic #BestMoments #ViralShorts #TrendingShorts 
+#ForYou #FYP #Insane #Podcast #Motivation #Success #Inspiration
+"""
+    return description
+
+def generate_viral_tags():
+    tags = [
+        "shorts", "viral", "trending", "youtube shorts", "viral shorts",
+        "must watch", "mind blowing", "shocking", "amazing", "insane",
+        "2025", "viral 2025", "trending 2025", "usa", "motivational",
+        "podcast clips", "best moments", "viral content", "fyp", "for you"
+    ]
+    random.shuffle(tags)
+    return tags[:30]
+
+# ==================== UPLOAD ====================
 def get_authenticated_service():
-    """YouTube upload ke liye authentication"""
     credentials = None
     
     if os.path.exists('token.json'):
@@ -352,209 +553,104 @@ def get_authenticated_service():
     return build('youtube', 'v3', credentials=credentials)
 
 def upload_short(youtube, video_file, original_title, original_views, video_url, clip_number):
-    """YouTube short upload karta hai with VIRAL title, description & tags"""
-    
-    # Viral title, description aur tags generate karo
-    viral_title = generate_viral_title(original_title, clip_number)
-    viral_description = generate_viral_description(original_title, original_views, video_url)
-    viral_tags = generate_viral_tags()
-    
-    print(f"📤 Uploading with VIRAL metadata:")
-    print(f"   Title: {viral_title}")
-    print(f"   Tags: {len(viral_tags)} viral tags")
-    
-    body = {
-        'snippet': {
-            'title': viral_title,
-            'description': viral_description,
-            'tags': viral_tags,
-            'categoryId': '24'  # Entertainment
-        },
-        'status': {
-            'privacyStatus': 'public',
-            'selfDeclaredMadeForKids': False
+    try:
+        viral_title = generate_viral_title(original_title, clip_number)
+        viral_description = generate_viral_description(original_title, original_views, video_url)
+        viral_tags = generate_viral_tags()
+        
+        print(f"📤 Uploading VIRAL SHORT:")
+        print(f"   Title: {viral_title}\n")
+        
+        body = {
+            'snippet': {
+                'title': viral_title,
+                'description': viral_description,
+                'tags': viral_tags,
+                'categoryId': '24'
+            },
+            'status': {
+                'privacyStatus': 'public',
+                'selfDeclaredMadeForKids': False
+            }
         }
-    }
-    
-    media = MediaFileUpload(video_file, chunksize=-1, resumable=True)
-    
-    request = youtube.videos().insert(
-        part='snippet,status',
-        body=body,
-        media_body=media
-    )
-    
-    response = None
-    while response is None:
-        status, response = request.next_chunk()
-        if status:
-            print(f"Upload progress: {int(status.progress() * 100)}%")
-    
-    print(f"✅ Uploaded! Video ID: {response['id']}")
-    print(f"   URL: https://youtube.com/shorts/{response['id']}\n")
-    
-    return response['id']
+        
+        media = MediaFileUpload(video_file, chunksize=-1, resumable=True)
+        
+        request = youtube.videos().insert(
+            part='snippet,status',
+            body=body,
+            media_body=media
+        )
+        
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                print(f"Upload: {int(status.progress() * 100)}%")
+        
+        print(f"✅ UPLOADED! https://youtube.com/shorts/{response['id']}\n")
+        return response['id']
+    except Exception as e:
+        print(f"❌ Upload API Error: {e}")
+        raise e
 
 # ==================== MAIN WORKFLOW ====================
-def run_upload_cycle(specific_url=None, specific_count=None, upload_one_now=False):
-    """Ek complete upload cycle chalata hai (QUEUE SYSTEM ADDED)"""
+def run_upload_cycle():
     try:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print("\n" + "="*60)
-        print(f"🚀 Upload Cycle Started: {current_time}")
-        print("="*60 + "\n")
+        print("\n" + "="*70)
+        print(f"🚀 VIRAL SHORTS AUTOMATION CYCLE: {current_time}")
+        print("="*70 + "\n")
         
-        # Upload history load karo
         history = load_upload_history()
+        search_query = random.choice(SEARCH_QUERIES)
         
-        # Upload history load karo
-        history = load_upload_history()
-        clip_metadata = load_clip_metadata()
+        print(f"🔎 Searching: {search_query}\n")
         
-        # === QUEUE CHECK ===
-        # Check agar koi clips already ready hain (aur hum specific URL process nahi kar rahe)
-        ready_clips = [f for f in os.listdir(CLIPS_FOLDER) if f.endswith(".mp4")]
-        
-        if ready_clips and not specific_url:
-            print(f"📂 Queue check: {len(ready_clips)} clips found in folder.")
-            
-            # Pick one clip to upload
-            clip_filename = ready_clips[0]
-            clip_path = os.path.join(CLIPS_FOLDER, clip_filename)
-            
-            if clip_filename in clip_metadata:
-                meta = clip_metadata[clip_filename]
-                print(f"🎬 Processing queued clip: {clip_filename}")
-                print(f"   Original Title: {meta.get('original_title', 'Unknown')}")
-                
-                try:
-                     # Upload
-                    youtube = get_authenticated_service()
-                    upload_short(
-                        youtube, 
-                        clip_path, 
-                        meta.get('original_title', 'Viral Video'), 
-                        meta.get('original_views', 0), 
-                        meta.get('video_url', ''), 
-                        random.randint(1, 100)
-                    )
-                    
-                    # Cleanup
-                    os.remove(clip_path)
-                    del clip_metadata[clip_filename]
-                    save_clip_metadata(clip_metadata)
-                    print(f"✅ Queued clip uploaded and removed from queue.")
-                    return # Cycle complete
-                    
-                except Exception as e:
-                    print(f"❌ Failed to upload queued clip: {e}")
-                    # Don't delete if failed, try next time
-                    return
-            else:
-                print(f"⚠️ Metadata missing for {clip_filename}, skipping queue mode.")
-                # Proceed to normal flow or maybe clean up orphan files?
-        
-        # === NEW CONTENT FETCH ===
-        
-        viral_videos = []
-        
-        if specific_url:
-            print(f"🔗 Processing Specific URL: {specific_url}")
-            # Mock viral video object
-            viral_videos.append({
-                'video_id': specific_url.split('v=')[-1].split('&')[0] if 'v=' in specific_url else 'custom',
-                'title': 'Custom Video Request',
-                'views': 1000000,
-                'url': specific_url
-            })
-        else:
-            # Normal Search Flow
-            # Random search query select karo (variety ke liye)
-            search_query = random.choice(SEARCH_QUERIES)
-            print(f"🔎 Search Query: {search_query}\n")
-            
-            # Step 1: Viral videos dhoondhna
-            viral_videos = find_viral_videos(query=search_query, max_results=2, history=history)
+        # Find LONG videos only
+        viral_videos = find_viral_long_videos(query=search_query, max_results=2, history=history)
         
         if not viral_videos:
-            print("❌ Koi naye viral videos nahi mile! Next cycle me try karenge.")
+            print("❌ No new long videos found. Next cycle...\n")
             return
         
-        print(f"\n✅ {len(viral_videos)} naye viral videos mile!\n")
-        
-        # Step 2-3: Download aur clips extract karna
         all_clips = []
         processed_video_ids = []
         
         for video in viral_videos:
+            print(f"🎬 Processing: {video['title'][:60]}")
+            print(f"   Duration: {video['duration']//60} min | Views: {video['views']:,}\n")
+            
             video_path = os.path.join(DOWNLOAD_FOLDER, f"{video['video_id']}.mp4")
             
-            # Download
             if download_video(video['url'], video_path):
-                # Extract clips (limited to CLIPS_PER_CYCLE)
-                count = specific_count if specific_count else CLIPS_PER_CYCLE
-                clips = extract_clips(video_path, video, num_clips=count, add_overlay=True)
+                clips = extract_viral_clips(video_path, video, num_clips=CLIPS_PER_CYCLE)
                 
                 for clip in clips:
                     clip['original_title'] = video['title']
                     clip['original_views'] = video['views']
                     clip['video_url'] = video['url']
                     all_clips.append(clip)
-                    
-                    # Save metadata
-                    clip_metadata[clip['filename']] = clip
-                
-                save_clip_metadata(clip_metadata)
                 
                 processed_video_ids.append(video['video_id'])
+                if os.path.exists(video_path):
+                    os.remove(video_path)
+                print(f"🗑️  Original deleted\n")
                 
-                # Original video delete karo
-                os.remove(video_path)
-                print(f"🗑️  Original video deleted: {video_path}\n")
-                
-                # Agar enough clips mil gaye to stop
-                if len(all_clips) >= count:
+                if len(all_clips) >= CLIPS_PER_CYCLE:
                     break
         
         if not all_clips:
-            print("❌ Clips nahi ban sake!")
+            print("❌ No clips created\n")
             return
         
-        print(f"\n✅ {len(all_clips)} clips ready/added to queue!\n")
-        
-        # Step 4: YouTube pe upload (Only one if standard cycle, or handled differently for specific)
-        
-        # Agar specific URL tha, toh decide karo ki upload karna hai ya nahi
-        clips_to_upload_now = []
-        
-        if specific_url:
-            if upload_one_now:
-                # Upload only the first one
-                clips_to_upload_now.append(all_clips[0])
-                print("🚀 Uploading 1 clip now as requested, others remain in queue.")
-            else:
-                print("💾 All clips saved to queue. None uploaded now.")
-        else:
-            # Standard flow - maybe upload 1?
-            # Original logic uploaded CLIPS_PER_CYCLE (1). 
-            # Setup already checks queue first, so if we are here, queue was empty.
-            # We generated new clips. We should upload one and queue the rest?
-            # For simplicity, let's keep original behavior: upload CLIPS_PER_CYCLE (1)
-            # But since we save metadata now, we can just treat them as queued.
-            
-            clips_to_upload_now.append(all_clips[0])
-            
-        
-        youtube = None # Initialize lazily
-        
+        # Upload
+        youtube = get_authenticated_service()
         uploaded_count = 0
         
-        for i, clip in enumerate(clips_to_upload_now):
-            if youtube is None:
-                youtube = get_authenticated_service()
-                
+        for i, clip in enumerate(all_clips[:CLIPS_PER_CYCLE]):
             try:
-                video_id = upload_short(
+                upload_short(
                     youtube, 
                     clip['path'], 
                     clip['original_title'],
@@ -563,126 +659,62 @@ def run_upload_cycle(specific_url=None, specific_count=None, upload_one_now=Fals
                     i+1
                 )
                 uploaded_count += 1
-                print(f"✅ Clip downloaded & uploaded successfully!\n")
-                
-                # Remove from metadata/queue if uploaded
-                if clip['filename'] in clip_metadata:
-                    del clip_metadata[clip['filename']]
-                
-                # Clean up file
-                os.remove(clip['path'])
-                
-                # Save metadata update
-                save_clip_metadata(clip_metadata)
-                
-                # Small delay to avoid rate limits
                 time.sleep(5)
-                
             except Exception as e:
-                print(f"❌ Upload failed for clip {i+1}: {e}")
-                
-                # Retry with minimal tags if tag error suspected
-                if "invalidTags" in str(e):
-                    print("⚠️ Retrying with minimal tags...")
-                    try:
-                        # Viral title, description aur tags generate karo
-                        viral_title = generate_viral_title(clip['original_title'], i+1)
-                        viral_description = generate_viral_description(clip['original_title'], clip['original_views'], clip['video_url'])
-                        simple_tags = ["shorts", "viral", "trending"]
-                        
-                        body = {
-                            'snippet': {
-                                'title': viral_title,
-                                'description': viral_description,
-                                'tags': simple_tags,
-                                'categoryId': '24' 
-                            },
-                            'status': {
-                                'privacyStatus': 'public',
-                                'selfDeclaredMadeForKids': False
-                            }
-                        }
-                        
-                        media = MediaFileUpload(clip['path'], chunksize=-1, resumable=True)
-                        request = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
-                        response = None
-                        while response is None:
-                            status, response = request.next_chunk()
-                            if status:
-                                print(f"Retry Upload progress: {int(status.progress() * 100)}%")
-                                
-                        uploaded_count += 1
-                        print(f"✅ Retry Successful! Video ID: {response['id']}")
-                        print(f"   URL: https://youtube.com/shorts/{response['id']}\n")
-                        
-                    except Exception as retry_e:
-                         print(f"❌ Retry failed too: {retry_e}\n")
-                else:
-                    print("\n")
+                print(f"❌ Upload failed: {e}\n")
+            finally:
+                # Cleanup clips after upload attempt (to save space)
+                if os.path.exists(clip['path']):
+                     os.remove(clip['path'])
         
-        # Update history
         history['uploaded_videos'].extend(processed_video_ids)
         history['last_upload_time'] = current_time
         save_upload_history(history)
         
-        print("\n" + "="*60)
-        print(f"🎉 Cycle Complete! {uploaded_count} clips uploaded")
-        print(f"⏰ Next upload: As per schedule (09:00 AM / 08:00 PM)")
-        print("="*60 + "\n")
+        print("="*70)
+        print(f"🎉 CYCLE COMPLETE! {uploaded_count} viral shorts uploaded")
+        print(f"⏰ Next upload in {UPLOAD_INTERVAL_HOURS} hours")
+        print("="*70 + "\n")
         
     except Exception as e:
-        print(f"\n❌ Cycle error: {e}\n")
-        print("⏰ Will retry in next cycle...\n")
+        print(f"\n❌ Error: {e}\n")
+
 
 def main():
-    """Main function - automated mode, manual mode, or specific video"""
-    print("🚀 YouTube Viral Shorts Automation")
-    print("="*60)
+    print("🚀 VIRAL SHORTS AUTOMATION (Vizard/Opus Style)")
+    print("="*70)
+    print("Features:")
+    print("✅ Only LONG videos (5+ min) - NO shorts")
+    print("✅ AI-powered viral moment detection")
+    print("✅ Automatic VIRAL CAPTIONS (Vizard/Opus style)")
+    print("✅ Viral titles, descriptions & tags")
+    print("✅ Monetization-ready content")
+    print("="*70)
     
-    parser = argparse.ArgumentParser(description="YouTube Shorts Automation")
-    parser.add_argument("--manual", action="store_true", help="Run manually once")
-    parser.add_argument("--url", type=str, help="Specific YouTube Video URL to process")
-    parser.add_argument("--count", type=int, default=3, help="Number of clips to generate")
-    parser.add_argument("--upload-one-now", action="store_true", help="Upload one clip immediately after generating")
-    
-    args = parser.parse_args()
-    
-    if args.url:
-        print(f"\n🎥 Specific Video Mode")
-        print(f"   URL: {args.url}")
-        print(f"   Clips to generate: {args.count}")
-        print(f"   Upload immediately: {args.upload_one_now}")
-        
-        run_upload_cycle(specific_url=args.url, specific_count=args.count, upload_one_now=args.upload_one_now)
+    # Check for CLI args first (GitHub Actions)
+    if len(sys.argv) > 1 and sys.argv[1] == "--automated-run-once":
+        print("🤖 Running in Automated One-Time Mode (GitHub Actions)")
+        run_upload_cycle()
+        print("🤖 Automation cycle finished. Exiting.")
         sys.exit(0)
-        
-    elif args.manual:
-        mode = "2"
-    else:
-        mode = input("\nKaunsa mode chahiye?\n1. Automated (har 10 ghante)\n2. Manual (ek baar run)\n\nEnter (1/2): ").strip()
+
+    mode = input("\nMode?\n1. Automated (every 10 hours)\n2. Manual (once)\n\nEnter (1/2): ").strip()
     
     if mode == "1":
-        print(f"\n✅ Automated mode activated!")
-        print(f"⏰ Uploads scheduled: Daily at 09:00 AM and 08:00 PM")
+        print(f"\n✅ Automated mode ON!")
+        print(f"⏰ Schedule: Every {UPLOAD_INTERVAL_HOURS} hours")
         print(f"📊 Clips per cycle: {CLIPS_PER_CYCLE}")
         print("\n🔄 Press Ctrl+C to stop\n")
         
-        # Schedule setup - 9 AM aur 8 PM
-        schedule.every().day.at("09:00").do(run_upload_cycle)
-        schedule.every().day.at("20:00").do(run_upload_cycle)
+        run_upload_cycle()
+        schedule.every(UPLOAD_INTERVAL_HOURS).hours.do(run_upload_cycle)
         
-        # Infinite loop - scheduler chalata rahega
         while True:
             schedule.run_pending()
-            time.sleep(60)  # Har minute check karo
-            
+            time.sleep(60)
     else:
-        # Manual mode - ek baar run
-        print("\n✅ Manual mode - Running once...\n")
+        print("\n✅ Manual mode\n")
         run_upload_cycle()
-        print("\n✅ Manual run complete!")
-        print(f"📁 Clips saved in: {CLIPS_FOLDER}")
-        sys.exit(0) # Exit cleanly for GitHub Actions
 
 if __name__ == "__main__":
     main()

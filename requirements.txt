@@ -3,3 +3,5 @@ google-auth-oauthlib
 google-auth-httplib2
 yt-dlp
 schedule
+moviepy
+openai-whisper
