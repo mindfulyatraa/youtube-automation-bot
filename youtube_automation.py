@@ -234,7 +234,7 @@ def download_video(video_url, output_path):
     # Use python -m yt_dlp instead of direct executable to ensure it runs
     command = [
         sys.executable, '-m', 'yt_dlp',
-        '-f', 'bestvideo[height<=1080]+bestaudio/best',
+        '-f', 'bestvideo+bestaudio/best', # Removed height<=1080 limit for 4K support
         '--merge-output-format', 'mp4',
         '-o', output_path,
         video_url
@@ -274,6 +274,7 @@ def extract_clips(video_path, video_info, num_clips=3):
         clip_path = os.path.join(CLIPS_FOLDER, clip_filename)
         
         # FFmpeg se clip extract karo (vertical format for shorts)
+        # High Quality Settings: CRF 18 (Visually Lossless), Preset veryfast (Speed balance)
         command = [
             FFMPEG_BINARY,
             '-ss', str(start_time),
@@ -281,7 +282,10 @@ def extract_clips(video_path, video_info, num_clips=3):
             '-t', str(CLIP_DURATION),
             '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
             '-c:v', 'libx264',
+            '-crf', '18', # Increased quality (lower is better, 18-23 is standard)
+            '-preset', 'veryfast', # Faster encoding for cloud runner
             '-c:a', 'aac',
+            '-b:a', '192k', # Better audio quality
             '-y',
             clip_path
         ]
