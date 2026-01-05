@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+env/
+
+# Media Files
+downloads/
+clips/
+*.mp4
+*.mp3
+
+# Binaries
+ffmpeg.exe
+
+# Secrets (From GitHub Secrets)
+token.json
+client_secrets.json
+
+# Keep history
+!upload_history.json
