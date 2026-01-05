@@ -312,7 +312,8 @@ def extract_clips(video_path, video_info, num_clips=3, add_overlay=False):
             video_filter = "eq=saturation=1.3:contrast=1.1"
             
             # Update filter chain: scale/crop -> color grading
-            command[9] = f'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,{video_filter}'
+            # Index 8 is the filter string (after -vf at index 7)
+            command[8] = f'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,{video_filter}'
 
         command.extend(['-y', clip_path])
         
