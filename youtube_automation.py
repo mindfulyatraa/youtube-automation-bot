@@ -11,11 +11,13 @@ import random
 import re
 import time
 import schedule
+import argparse
 
 # ==================== CONFIGURATION ====================
 YOUTUBE_API_KEY = "AIzaSyDOXwfmQQnhw2P3FHauy_q0skaDd4i2Xqg"  # YouTube Data API key
 DOWNLOAD_FOLDER = "downloads"
 CLIPS_FOLDER = "clips"
+METADATA_FILE = os.path.join(CLIPS_FOLDER, "metadata.json")
 SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 # Shorts settings
@@ -56,6 +58,21 @@ def save_upload_history(history):
     """Upload history save karta hai"""
     with open(UPLOAD_HISTORY_FILE, 'w') as f:
         json.dump(history, f, indent=2)
+
+def load_clip_metadata():
+    """Clips ka metadata load karta hai"""
+    if os.path.exists(METADATA_FILE):
+        try:
+            with open(METADATA_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_clip_metadata(metadata):
+    """Clips ka metadata save karta hai"""
+    with open(METADATA_FILE, 'w') as f:
+        json.dump(metadata, f, indent=2)
 
 def is_already_processed(video_id, history):
     """Check karta hai ki video already process ho chuki hai"""
@@ -141,7 +158,7 @@ def generate_viral_tags():
     current_length = 0
     
     for tag in all_tags:
-        if current_length + len(tag) + 1 < 480: # Safety margin
+        if current_length + len(tag) + 1 < 400: # Safety margin reduced to 400
             final_tags.append(tag)
             current_length += len(tag) + 1
         else:
@@ -249,8 +266,8 @@ def download_video(video_url, output_path):
         return False
 
 # ==================== STEP 3: EXTRACT VIRAL CLIPS ====================
-def extract_clips(video_path, video_info, num_clips=3):
-    """Video se multiple clips extract karta hai"""
+def extract_clips(video_path, video_info, num_clips=3, add_overlay=False):
+    """Video se multiple clips extract karta hai (Optional: Text Overlay)"""
     print(f"✂️  Clips extract ho rahe hain...")
     
     # Video duration nikalo
@@ -286,9 +303,21 @@ def extract_clips(video_path, video_info, num_clips=3):
             '-preset', 'veryfast', # Faster encoding for cloud runner
             '-c:a', 'aac',
             '-b:a', '192k', # Better audio quality
-            '-y',
-            clip_path
         ]
+        
+        # Add Text Overlay
+        if add_overlay:
+            # Replacing text overlay with Color Grading (Saturation Boost) to avoid Font Path issues on Windows
+            # This fulfills "halka sa edit" requirement
+            video_filter = "eq=saturation=1.3:contrast=1.1"
+            
+            # Update filter chain: scale/crop -> color grading
+            command[9] = f'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,{video_filter}'
+
+        command.extend(['-y', clip_path])
+        
+        # Debug: Print command
+        # print("Running command:", " ".join(command))
         
         try:
             subprocess.run(command, check=True, capture_output=True)
@@ -366,8 +395,8 @@ def upload_short(youtube, video_file, original_title, original_views, video_url,
     return response['id']
 
 # ==================== MAIN WORKFLOW ====================
-def run_upload_cycle():
-    """Ek complete upload cycle chalata hai"""
+def run_upload_cycle(specific_url=None, specific_count=None, upload_one_now=False):
+    """Ek complete upload cycle chalata hai (QUEUE SYSTEM ADDED)"""
     try:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print("\n" + "="*60)
@@ -377,12 +406,74 @@ def run_upload_cycle():
         # Upload history load karo
         history = load_upload_history()
         
-        # Random search query select karo (variety ke liye)
-        search_query = random.choice(SEARCH_QUERIES)
-        print(f"🔎 Search Query: {search_query}\n")
+        # Upload history load karo
+        history = load_upload_history()
+        clip_metadata = load_clip_metadata()
         
-        # Step 1: Viral videos dhoondhna
-        viral_videos = find_viral_videos(query=search_query, max_results=2, history=history)
+        # === QUEUE CHECK ===
+        # Check agar koi clips already ready hain (aur hum specific URL process nahi kar rahe)
+        ready_clips = [f for f in os.listdir(CLIPS_FOLDER) if f.endswith(".mp4")]
+        
+        if ready_clips and not specific_url:
+            print(f"📂 Queue check: {len(ready_clips)} clips found in folder.")
+            
+            # Pick one clip to upload
+            clip_filename = ready_clips[0]
+            clip_path = os.path.join(CLIPS_FOLDER, clip_filename)
+            
+            if clip_filename in clip_metadata:
+                meta = clip_metadata[clip_filename]
+                print(f"🎬 Processing queued clip: {clip_filename}")
+                print(f"   Original Title: {meta.get('original_title', 'Unknown')}")
+                
+                try:
+                     # Upload
+                    youtube = get_authenticated_service()
+                    upload_short(
+                        youtube, 
+                        clip_path, 
+                        meta.get('original_title', 'Viral Video'), 
+                        meta.get('original_views', 0), 
+                        meta.get('video_url', ''), 
+                        random.randint(1, 100)
+                    )
+                    
+                    # Cleanup
+                    os.remove(clip_path)
+                    del clip_metadata[clip_filename]
+                    save_clip_metadata(clip_metadata)
+                    print(f"✅ Queued clip uploaded and removed from queue.")
+                    return # Cycle complete
+                    
+                except Exception as e:
+                    print(f"❌ Failed to upload queued clip: {e}")
+                    # Don't delete if failed, try next time
+                    return
+            else:
+                print(f"⚠️ Metadata missing for {clip_filename}, skipping queue mode.")
+                # Proceed to normal flow or maybe clean up orphan files?
+        
+        # === NEW CONTENT FETCH ===
+        
+        viral_videos = []
+        
+        if specific_url:
+            print(f"🔗 Processing Specific URL: {specific_url}")
+            # Mock viral video object
+            viral_videos.append({
+                'video_id': specific_url.split('v=')[-1].split('&')[0] if 'v=' in specific_url else 'custom',
+                'title': 'Custom Video Request',
+                'views': 1000000,
+                'url': specific_url
+            })
+        else:
+            # Normal Search Flow
+            # Random search query select karo (variety ke liye)
+            search_query = random.choice(SEARCH_QUERIES)
+            print(f"🔎 Search Query: {search_query}\n")
+            
+            # Step 1: Viral videos dhoondhna
+            viral_videos = find_viral_videos(query=search_query, max_results=2, history=history)
         
         if not viral_videos:
             print("❌ Koi naye viral videos nahi mile! Next cycle me try karenge.")
@@ -400,13 +491,19 @@ def run_upload_cycle():
             # Download
             if download_video(video['url'], video_path):
                 # Extract clips (limited to CLIPS_PER_CYCLE)
-                clips = extract_clips(video_path, video, num_clips=CLIPS_PER_CYCLE)
+                count = specific_count if specific_count else CLIPS_PER_CYCLE
+                clips = extract_clips(video_path, video, num_clips=count, add_overlay=True)
                 
                 for clip in clips:
                     clip['original_title'] = video['title']
                     clip['original_views'] = video['views']
                     clip['video_url'] = video['url']
                     all_clips.append(clip)
+                    
+                    # Save metadata
+                    clip_metadata[clip['filename']] = clip
+                
+                save_clip_metadata(clip_metadata)
                 
                 processed_video_ids.append(video['video_id'])
                 
@@ -415,20 +512,46 @@ def run_upload_cycle():
                 print(f"🗑️  Original video deleted: {video_path}\n")
                 
                 # Agar enough clips mil gaye to stop
-                if len(all_clips) >= CLIPS_PER_CYCLE:
+                if len(all_clips) >= count:
                     break
         
         if not all_clips:
             print("❌ Clips nahi ban sake!")
             return
         
-        print(f"\n✅ {len(all_clips)} clips ready for upload!\n")
+        print(f"\n✅ {len(all_clips)} clips ready/added to queue!\n")
         
-        # Step 4: YouTube pe upload
-        youtube = get_authenticated_service()
+        # Step 4: YouTube pe upload (Only one if standard cycle, or handled differently for specific)
+        
+        # Agar specific URL tha, toh decide karo ki upload karna hai ya nahi
+        clips_to_upload_now = []
+        
+        if specific_url:
+            if upload_one_now:
+                # Upload only the first one
+                clips_to_upload_now.append(all_clips[0])
+                print("🚀 Uploading 1 clip now as requested, others remain in queue.")
+            else:
+                print("💾 All clips saved to queue. None uploaded now.")
+        else:
+            # Standard flow - maybe upload 1?
+            # Original logic uploaded CLIPS_PER_CYCLE (1). 
+            # Setup already checks queue first, so if we are here, queue was empty.
+            # We generated new clips. We should upload one and queue the rest?
+            # For simplicity, let's keep original behavior: upload CLIPS_PER_CYCLE (1)
+            # But since we save metadata now, we can just treat them as queued.
+            
+            clips_to_upload_now.append(all_clips[0])
+            
+        
+        youtube = None # Initialize lazily
+        
         uploaded_count = 0
         
-        for i, clip in enumerate(all_clips[:CLIPS_PER_CYCLE]):
+        for i, clip in enumerate(clips_to_upload_now):
+            if youtube is None:
+                youtube = get_authenticated_service()
+                
             try:
                 video_id = upload_short(
                     youtube, 
@@ -439,13 +562,62 @@ def run_upload_cycle():
                     i+1
                 )
                 uploaded_count += 1
-                print(f"✅ Clip {i+1} uploaded successfully!\n")
+                print(f"✅ Clip downloaded & uploaded successfully!\n")
+                
+                # Remove from metadata/queue if uploaded
+                if clip['filename'] in clip_metadata:
+                    del clip_metadata[clip['filename']]
+                
+                # Clean up file
+                os.remove(clip['path'])
+                
+                # Save metadata update
+                save_clip_metadata(clip_metadata)
                 
                 # Small delay to avoid rate limits
                 time.sleep(5)
                 
             except Exception as e:
-                print(f"❌ Upload failed for clip {i+1}: {e}\n")
+                print(f"❌ Upload failed for clip {i+1}: {e}")
+                
+                # Retry with minimal tags if tag error suspected
+                if "invalidTags" in str(e):
+                    print("⚠️ Retrying with minimal tags...")
+                    try:
+                        # Viral title, description aur tags generate karo
+                        viral_title = generate_viral_title(clip['original_title'], i+1)
+                        viral_description = generate_viral_description(clip['original_title'], clip['original_views'], clip['video_url'])
+                        simple_tags = ["shorts", "viral", "trending"]
+                        
+                        body = {
+                            'snippet': {
+                                'title': viral_title,
+                                'description': viral_description,
+                                'tags': simple_tags,
+                                'categoryId': '24' 
+                            },
+                            'status': {
+                                'privacyStatus': 'public',
+                                'selfDeclaredMadeForKids': False
+                            }
+                        }
+                        
+                        media = MediaFileUpload(clip['path'], chunksize=-1, resumable=True)
+                        request = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
+                        response = None
+                        while response is None:
+                            status, response = request.next_chunk()
+                            if status:
+                                print(f"Retry Upload progress: {int(status.progress() * 100)}%")
+                                
+                        uploaded_count += 1
+                        print(f"✅ Retry Successful! Video ID: {response['id']}")
+                        print(f"   URL: https://youtube.com/shorts/{response['id']}\n")
+                        
+                    except Exception as retry_e:
+                         print(f"❌ Retry failed too: {retry_e}\n")
+                else:
+                    print("\n")
         
         # Update history
         history['uploaded_videos'].extend(processed_video_ids)
@@ -462,11 +634,28 @@ def run_upload_cycle():
         print("⏰ Will retry in next cycle...\n")
 
 def main():
-    """Main function - automated mode ya manual mode"""
+    """Main function - automated mode, manual mode, or specific video"""
     print("🚀 YouTube Viral Shorts Automation")
     print("="*60)
     
-    if len(sys.argv) > 1 and sys.argv[1] == "--manual":
+    parser = argparse.ArgumentParser(description="YouTube Shorts Automation")
+    parser.add_argument("--manual", action="store_true", help="Run manually once")
+    parser.add_argument("--url", type=str, help="Specific YouTube Video URL to process")
+    parser.add_argument("--count", type=int, default=3, help="Number of clips to generate")
+    parser.add_argument("--upload-one-now", action="store_true", help="Upload one clip immediately after generating")
+    
+    args = parser.parse_args()
+    
+    if args.url:
+        print(f"\n🎥 Specific Video Mode")
+        print(f"   URL: {args.url}")
+        print(f"   Clips to generate: {args.count}")
+        print(f"   Upload immediately: {args.upload_one_now}")
+        
+        run_upload_cycle(specific_url=args.url, specific_count=args.count, upload_one_now=args.upload_one_now)
+        sys.exit(0)
+        
+    elif args.manual:
         mode = "2"
     else:
         mode = input("\nKaunsa mode chahiye?\n1. Automated (har 10 ghante)\n2. Manual (ek baar run)\n\nEnter (1/2): ").strip()
