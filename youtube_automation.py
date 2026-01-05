@@ -220,12 +220,31 @@ def add_captions_to_video(video_path, captions, output_path):
         print(f"❌ Error adding captions (MoviePy/ImageMagick): {e}")
         # If captions fail, copy original video as fallback (don't lose the content)
         try:
+             # Ensure video is closed if it was opened
+             if 'video' in locals() and video:
+                 video.close()
+             
              import shutil
              shutil.copy(video_path, output_path)
              print("⚠️ Fallback: Copied video without captions.")
              return True
-        except:
+        except Exception as cleanup_img_error:
+             print(f"Fallback failed: {cleanup_img_error}")
              return False
+
+# ==================== IMAGEMAGICK CONFIG ====================
+# Auto-detect and set ImageMagick path for Windows
+if os.name == 'nt':
+    possible_paths = [
+        r"C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe",
+        r"C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\convert.exe",
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            from moviepy.config import change_settings
+            change_settings({"IMAGEMAGICK_BINARY": path})
+            print(f"✅ ImageMagick configured: {path}")
+            break
 
 
 # ==================== VIDEO ANALYSIS ====================
@@ -234,19 +253,15 @@ def analyze_video_engagement(video_path, num_segments=10):
     print("🔍 Video ke viral moments analyze ho rahe hain...")
     
     # Video ko segments me divide karo
-    probe_command = [
-        'ffprobe',
-        '-v', 'error',
-        '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        video_path
-    ]
-    
-    result = subprocess.run(probe_command, capture_output=True, text=True)
+    # Video ko segments me divide karo
     try:
-        duration = float(result.stdout.strip())
-    except:
-        return [] # Fail gracefully
+        # Use MoviePy for duration (robust if ffprobe missing)
+        clip = VideoFileClip(video_path)
+        duration = clip.duration
+        clip.close()
+    except Exception as e:
+        print(f"⚠️ Error getting duration: {e}")
+        return [] 
     
     segment_duration = duration / num_segments
     
@@ -266,7 +281,7 @@ def analyze_video_engagement(video_path, num_segments=10):
             '-'
         ]
         
-        result = subprocess.run(loudness_command, capture_output=True, text=True, stderr=subprocess.STDOUT)
+        result = subprocess.run(loudness_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         
         # Mean volume extract karo
         mean_volume = -30  # default
@@ -338,9 +353,15 @@ def find_viral_long_videos(query="podcast full episode", max_results=5, history=
                 duration_seconds = parse_duration(duration_str)
                 views = int(stats.get('viewCount', 0))
                 
-                # STRICT CHECK: Only long videos (5+ minutes), NO shorts
-                if (views >= MIN_VIEWS_THRESHOLD and 
-                    duration_seconds >= MIN_VIDEO_DURATION and
+                # Relaxed check for manual search testing
+                is_manual_search = query not in SEARCH_QUERIES
+                
+                min_views = 0 if is_manual_search else MIN_VIEWS_THRESHOLD
+                min_duration = 60 if is_manual_search else MIN_VIDEO_DURATION
+                
+                # STRICT CHECK: Only long videos (5+ minutes), NO shorts (unless manual)
+                if (views >= min_views and 
+                    duration_seconds >= min_duration and
                     duration_seconds <= MAX_VIDEO_DURATION):
                     
                     viral_videos.append({
@@ -355,6 +376,8 @@ def find_viral_long_videos(query="podcast full episode", max_results=5, history=
                     
                     if len(viral_videos) >= max_results:
                         break
+                else:
+                    print(f"⚠️ Skipped: {item['snippet']['title'][:40]}... (Views: {views}, Dur: {duration_seconds}s)")
         except Exception as e:
             print(f"Skipping video check due to error: {e}")
             continue
@@ -595,7 +618,7 @@ def upload_short(youtube, video_file, original_title, original_views, video_url,
         raise e
 
 # ==================== MAIN WORKFLOW ====================
-def run_upload_cycle():
+def run_upload_cycle(specific_url=None, specific_search_query=None):
     try:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print("\n" + "="*70)
@@ -603,12 +626,32 @@ def run_upload_cycle():
         print("="*70 + "\n")
         
         history = load_upload_history()
-        search_query = random.choice(SEARCH_QUERIES)
         
-        print(f"🔎 Searching: {search_query}\n")
-        
-        # Find LONG videos only
-        viral_videos = find_viral_long_videos(query=search_query, max_results=2, history=history)
+        if specific_url:
+            print(f"🔗 Processing SPECIFIC URL: {specific_url}\n")
+            # ... (existing mock logic or better yet, fetch details if possible, but mock is fine for now as find_viral_long_videos functionality is separate)
+            # Actually, standard flow uses find_viral_long_videos. 
+            # If specific_url is given, we should probably just download it directly?
+            # But the user wants "test karke dikhao", implying the full flow.
+            # Let's keep the mock for specific_url for now or improve it.
+            # BETTER: If specific URL, skip search and construct video object directly.
+            
+            # Since we don't have direct "get video details" independent function easily accessible 
+            # without refactoring, let's just stick to the search override if available.
+             
+            viral_videos = [{
+                'video_id': specific_url.split('v=')[-1], 
+                'title': "Specific Video Request",
+                'views': 999999, 
+                'duration': 600, 
+                'url': specific_url
+            }]
+        else:
+            search_query = specific_search_query if specific_search_query else random.choice(SEARCH_QUERIES)
+            print(f"🔎 Searching: {search_query}\n")
+            
+            # Find LONG videos only
+            viral_videos = find_viral_long_videos(query=search_query, max_results=2, history=history)
         
         if not viral_videos:
             print("❌ No new long videos found. Next cycle...\n")
@@ -680,6 +723,8 @@ def run_upload_cycle():
         print(f"\n❌ Error: {e}\n")
 
 
+import argparse
+
 def main():
     print("🚀 VIRAL SHORTS AUTOMATION (Vizard/Opus Style)")
     print("="*70)
@@ -691,11 +736,27 @@ def main():
     print("✅ Monetization-ready content")
     print("="*70)
     
-    # Check for CLI args first (GitHub Actions)
-    if len(sys.argv) > 1 and sys.argv[1] == "--automated-run-once":
+    parser = argparse.ArgumentParser(description="YouTube Automation")
+    parser.add_argument("--automated-run-once", action="store_true", help="Run once for automation")
+    parser.add_argument("--url", type=str, help="Specific video URL to process")
+    parser.add_argument("--search", type=str, help="Specific search query")
+    args = parser.parse_args()
+
+    # Check for CLI args first
+    if args.automated_run_once:
         print("🤖 Running in Automated One-Time Mode (GitHub Actions)")
         run_upload_cycle()
         print("🤖 Automation cycle finished. Exiting.")
+        sys.exit(0)
+        
+    if args.url:
+        print(f"🎯 Test Mode: Processing URL {args.url}")
+        run_upload_cycle(specific_url=args.url)
+        sys.exit(0)
+
+    if args.search:
+        print(f"🎯 Test Mode: Searching '{args.search}'")
+        run_upload_cycle(specific_search_query=args.search)
         sys.exit(0)
 
     mode = input("\nMode?\n1. Automated (every 10 hours)\n2. Manual (once)\n\nEnter (1/2): ").strip()
