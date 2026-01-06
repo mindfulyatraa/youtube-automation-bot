@@ -442,7 +442,7 @@ def upload_short(youtube, video_file, original_title, views, channel, video_url)
     return response['id']
 
 # ==================== SCHEDULED UPLOADS ====================
-def run_daily_upload():
+def run_daily_upload(manual_url=None):
     """Daily upload cycle - 8 AM & 8 PM"""
     try:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -452,8 +452,27 @@ def run_daily_upload():
         
         history = load_upload_history()
         
-        # Find viral videos
-        viral_videos = find_indian_viral_videos(max_results=2, history=history)
+        viral_videos = []
+        if manual_url:
+            print(f"🔗 Processing Manual URL: {manual_url}")
+            # Mock video details for manual run
+            video_id = "manual_video"
+            if "youtu.be" in manual_url:
+                video_id = manual_url.split('/')[-1].split('?')[0]
+            elif "v=" in manual_url:
+                video_id = manual_url.split('v=')[-1].split('&')[0]
+                
+            viral_videos = [{
+                'video_id': video_id,
+                'title': "Manual Test Video",
+                'views': 999999,
+                'duration': 600,
+                'channel': "Manual Test Channel",
+                'url': manual_url
+            }]
+        else:
+            # Find viral videos
+            viral_videos = find_indian_viral_videos(max_results=2, history=history)
         
         if not viral_videos:
             print("❌ No new viral videos found\n")
@@ -527,9 +546,14 @@ def main():
     # To be safe and compliant with the code logic:
     
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "--run-now":
-         run_daily_upload()
-         return
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--run-now":
+             run_daily_upload()
+             return
+        if sys.argv[1] == "--url" and len(sys.argv) > 2:
+             manual_url = sys.argv[2]
+             run_daily_upload(manual_url=manual_url)
+             return
 
     mode = input("\nMode?\n1. Scheduled (Daily 8AM & 8PM)\n2. Run Now (once)\n\nEnter (1/2): ").strip()
     
