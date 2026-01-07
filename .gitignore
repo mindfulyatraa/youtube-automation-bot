@@ -19,3 +19,7 @@ client_secrets.json
 
 # Keep history
 !upload_history.json
+
+# Local Videos
+local_videos/
+temp/
