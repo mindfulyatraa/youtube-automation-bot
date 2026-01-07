@@ -1,3 +1,4 @@
+import schedule
 import os
 import time
 import json
@@ -7,7 +8,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 # Import necessary functions from the main automation script
-# We rely on your existing logic for auth, transcription, and viral analysis
 try:
     from youtube_automation import (
         get_authenticated_service, 
@@ -19,7 +19,6 @@ try:
     )
 except ImportError:
     print("❌ Critical: Could not import from youtube_automation.py")
-    print("Make sure both scripts are in the same folder.")
     exit(1)
 
 # Configuration
@@ -29,22 +28,14 @@ os.makedirs(LOCAL_VIDEO_FOLDER, exist_ok=True)
 os.makedirs(COMPLETED_FOLDER, exist_ok=True)
 
 def generate_seo_from_transcript(transcript):
-    """
-    Generates viral Title, Description, and Tags based on video transcription.
-    """
     if not transcript or 'text' not in transcript:
         return None
 
     full_text = transcript['text'].strip()
-    
-    # 1. Generate Title
-    # Extract keywords
     _, keywords = detect_viral_keywords(full_text)
     
-    # Create a hook based on text or keywords
     if keywords:
         main_keyword = keywords[0].title()
-        # Add some variety
         templates = [
             f"🔥 {main_keyword}! #Shorts",
             f"This is {main_keyword} 😱 #Shorts",
@@ -53,7 +44,6 @@ def generate_seo_from_transcript(transcript):
         ]
         title = random.choice(templates)
     else:
-        # Fallback if no specific viral keywords found
         words = full_text.split()
         if len(words) > 5:
             short_hook = ' '.join(words[:5]) + "..."
@@ -61,11 +51,9 @@ def generate_seo_from_transcript(transcript):
         else:
             title = "Must Watch! 😱 #Shorts"
 
-    # Ensure title is not too long
     if len(title) > 90:
         title = title[:87] + "..."
 
-    # 2. Generate Description
     desc = f"""🔥 VIRAL SHORTS
 
 {full_text[:100]}...
@@ -74,106 +62,105 @@ Subscribe for more!
 
 #Shorts #Viral #Trending #Motivation #Facts
 """
-
-    # 3. Generate Tags
-    base_tags = ['shorts', 'viral', 'trending', 'youtube shorts']
-    derived_tags = keywords[:5] if keywords else []
-    tags = base_tags + derived_tags
-
+    tags = ['shorts', 'viral', 'trending'] + (keywords[:5] if keywords else [])
     return title, desc, tags
 
-def upload_local_file(files, history):
-    youtube = get_authenticated_service()
-
-    for filename in files:
-        if filename.lower().endswith(('.mp4', '.mov', '.mkv')):
-            video_path = os.path.join(LOCAL_VIDEO_FOLDER, filename)
-            
-            # Check if already uploaded
-            # We can use filename as a unique ID for local files if we want, 
-            # or calculate a hash. For simplicity, let's track filenames in a separate list or 
-            # just rely on them being moved to 'completed' folder.
-            # But user might paste new files with same names? Unlikely for "500 videos".
-            # Let's check history by filename just in case.
-            if filename in history.get('uploaded_local_files', []):
-                print(f"⏭️  Skipping {filename} (Already uploaded)")
-                continue
-
-            print(f"\n🎬 Processing: {filename}")
-
-            # 1. Transcribe for SEO
-            print("   🎧 Analyzing audio for SEO...")
-            transcript = transcribe_video(video_path)
-            
-            if not transcript:
-                print("   ⚠️ No audio/transcription found. Using generic metadata.")
-                title = f"Amazing Video! 🔥 {filename} #Shorts"
-                desc = "Watch this viral video! #Shorts"
-                tags = ['shorts', 'viral']
-            else:
-                title, desc, tags = generate_seo_from_transcript(transcript)
-                print(f"   📝 Generated Title: {title}")
-
-            # 2. Upload
-            print(f"   📤 Uploading to YouTube...")
-            try:
-                body = {
-                    'snippet': {
-                        'title': title,
-                        'description': desc,
-                        'tags': tags,
-                        'categoryId': '24' # Entertainment
-                    },
-                    'status': {
-                        'privacyStatus': 'public', 
-                        'selfDeclaredMadeForKids': False
-                    }
-                }
-
-                media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-                request = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
-                
-                response = None
-                while response is None:
-                    status, response = request.next_chunk()
-                    if status:
-                        print(f"      🚀 {int(status.progress() * 100)}%")
-
-                print(f"   ✅ Uploaded! https://youtube.com/shorts/{response['id']}")
-
-                # 3. Update History
-                if 'uploaded_local_files' not in history:
-                    history['uploaded_local_files'] = []
-                history['uploaded_local_files'].append(filename)
-                save_upload_history(history)
-
-                # 4. Move to Completed
-                try:
-                    completed_path = os.path.join(COMPLETED_FOLDER, filename)
-                    os.rename(video_path, completed_path)
-                    print(f"   📂 Moved to {COMPLETED_FOLDER}")
-                except Exception as e:
-                    print(f"   ⚠️ Could not move file: {e}")
-
-            except Exception as e:
-                print(f"   ❌ Upload Failed: {e}")
-
-def main():
-    print("🚀 LOCAL VIDEO UPLOADER started...")
-    print(f"📂 Scanning folder: {LOCAL_VIDEO_FOLDER}")
+def run_scheduled_upload():
+    print(f"\n⏰ Checking for local videos to upload - {datetime.now()}")
     
+    # Scan folder
     files = [f for f in os.listdir(LOCAL_VIDEO_FOLDER) if os.path.isfile(os.path.join(LOCAL_VIDEO_FOLDER, f))]
+    valid_files = [f for f in files if f.lower().endswith(('.mp4', '.mov', '.mkv'))]
     
-    if not files:
-        print("❌ No videos found! Please paste your .mp4 files into the 'local_videos' folder.")
+    if not valid_files:
+        print("❌ No videos found in 'local_videos' folder.")
         return
 
-    print(f"found {len(files)} videos.")
+    # Process just ONE video per slot to match daily flow and being safe
+    filename = valid_files[0]
+    video_path = os.path.join(LOCAL_VIDEO_FOLDER, filename)
     
     history = load_upload_history()
-    upload_local_file(files, history)
+    if filename in history.get('uploaded_local_files', []):
+        print(f"⚠️ {filename} marked as uploaded in history but still in folder. Moving to completed.")
+        try:
+            os.rename(video_path, os.path.join(COMPLETED_FOLDER, filename))
+        except: pass
+        return
+
+    print(f"🎬 Starting upload for: {filename}")
+
+    # 1. Seo
+    print("   🎧 Analying audio...")
+    transcript = transcribe_video(video_path)
     
-    print("\n✅ All Done!")
+    if not transcript:
+        print("   ⚠️ Transcription failed/empty. Using defaults.")
+        title = f"Must Watch! {filename} #Shorts"
+        desc = "Viral Video! #Shorts"
+        tags = ['shorts']
+    else:
+        title, desc, tags = generate_seo_from_transcript(transcript)
+
+    # 2. Upload
+    print(f"   📤 Uploading...")
+    try:
+        youtube = get_authenticated_service()
+        body = {
+            'snippet': {
+                'title': title,
+                'description': desc,
+                'tags': tags,
+                'categoryId': '24'
+            },
+            'status': {
+                'privacyStatus': 'public', 
+                'selfDeclaredMadeForKids': False
+            }
+        }
+
+        media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
+        request = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
+        
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                print(f"      🚀 {int(status.progress() * 100)}%")
+
+        print(f"   ✅ Success! https://youtube.com/shorts/{response['id']}")
+
+        # 3. Update History
+        if 'uploaded_local_files' not in history:
+            history['uploaded_local_files'] = []
+        history['uploaded_local_files'].append(filename)
+        save_upload_history(history)
+
+        # 4. Move
+        os.rename(video_path, os.path.join(COMPLETED_FOLDER, filename))
+        print(f"   📂 Moved to completed folder.\n")
+        
+    except Exception as e:
+        print(f"   ❌ Error: {e}")
+
+def main():
+    print("🤖 LOCAL VIDEO SCHEDULER STARTED")
+    print("="*50)
+    print("✅ Monitoring 'local_videos' folder")
+    print("✅ Schedule: 08:00 AM & 08:00 PM")
+    print("✅ Status: WAITING for next slot...")
+    print("="*50)
+
+    # Schedule
+    schedule.every().day.at("08:00").do(run_scheduled_upload)
+    schedule.every().day.at("20:00").do(run_scheduled_upload)
+
+    # Run once immediately ONLY if confirming (Optional, but user said "rok de" so maybe NOT run now)
+    # The user said "jab mai bolunga tab on karna". So we should just start the scheduler and let it wait.
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
