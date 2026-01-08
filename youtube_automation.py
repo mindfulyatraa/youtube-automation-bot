@@ -583,6 +583,14 @@ def get_authenticated_service():
                 creds = None
 
     if not creds or not creds.valid:
+        # Check if we are in a headless environment (GitHub Actions)
+        if os.environ.get('GITHUB_ACTIONS') == 'true':
+            error_msg = "❌ Authentication failed on GitHub Actions. Token expired or invalid, and interactive login is not possible."
+            logging.error(error_msg)
+            print(error_msg)
+            # We cannot run local server in CI
+            raise Exception(error_msg)
+            
         flow = InstalledAppFlow.from_client_secrets_file('client_secrets.json', SCOPES)
         creds = flow.run_local_server(port=0)
         with open('token.json', 'w') as token:
