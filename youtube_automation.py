@@ -570,6 +570,18 @@ def get_authenticated_service():
     creds = None
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            from google.auth.transport.requests import Request
+            try:
+                creds.refresh(Request())
+                with open('token.json', 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                logging.error(f"Token refresh failed: {e}")
+                creds = None
+
     if not creds or not creds.valid:
         flow = InstalledAppFlow.from_client_secrets_file('client_secrets.json', SCOPES)
         creds = flow.run_local_server(port=0)
