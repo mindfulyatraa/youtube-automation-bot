@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 # ==================== CONFIGURATION ====================
-YOUTUBE_API_KEY = "AIzaSyBHcrCKOlHRWyUQKyY2w7-WdgAsKkc5WYE"
+YOUTUBE_API_KEY = "AIzaSyCq45n1NB2HmHAdWl1QmKAhOKppiLfzLOM"
 DOWNLOAD_FOLDER = "downloads"
 CLIPS_FOLDER = "clips"
 TEMP_FOLDER = "temp"
