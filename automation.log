@@ -1,0 +1,33 @@
+2026-01-08 11:59:07,337 - INFO - file_cache is only supported with oauth2client<4.0.0
+2026-01-08 11:59:07,768 - WARNING - Encountered 403 Forbidden with reason "quotaExceeded"
+2026-01-08 11:59:07,770 - ERROR - Error in run_daily_upload: <HttpError 403 when requesting https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=The+Ranveer+Show&type=video&order=date&publishedAfter=2026-01-01T11%3A59%3A07.348923Z&maxResults=10&regionCode=IN&key=AIzaSyBHcrCKOlHRWyUQKyY2w7-WdgAsKkc5WYE&alt=json returned "The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.". Details: "[{'message': 'The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.', 'domain': 'youtube.quota', 'reason': 'quotaExceeded'}]">
+Traceback (most recent call last):
+  File "C:\Users\erson\OneDrive\Desktop\automate youtube\youtube_automation.py", line 646, in run_daily_upload
+    winner = find_top_viral_video_from_all_channels(history)
+  File "C:\Users\erson\OneDrive\Desktop\automate youtube\youtube_automation.py", line 345, in find_top_viral_video_from_all_channels
+    raise e
+  File "C:\Users\erson\OneDrive\Desktop\automate youtube\youtube_automation.py", line 301, in find_top_viral_video_from_all_channels
+    response = search.execute()
+  File "C:\Users\erson\AppData\Local\Programs\Python\Python310\lib\site-packages\googleapiclient\_helpers.py", line 130, in positional_wrapper
+    return wrapped(*args, **kwargs)
+  File "C:\Users\erson\AppData\Local\Programs\Python\Python310\lib\site-packages\googleapiclient\http.py", line 938, in execute
+    raise HttpError(resp, content, uri=self.uri)
+googleapiclient.errors.HttpError: <HttpError 403 when requesting https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=The+Ranveer+Show&type=video&order=date&publishedAfter=2026-01-01T11%3A59%3A07.348923Z&maxResults=10&regionCode=IN&key=AIzaSyBHcrCKOlHRWyUQKyY2w7-WdgAsKkc5WYE&alt=json returned "The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.". Details: "[{'message': 'The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.', 'domain': 'youtube.quota', 'reason': 'quotaExceeded'}]">
+2026-01-08 12:37:30,946 - INFO - file_cache is only supported with oauth2client<4.0.0
+2026-01-08 12:37:31,500 - WARNING - Encountered 403 Forbidden with reason "quotaExceeded"
+2026-01-08 12:37:31,501 - ERROR - Error in run_daily_upload: <HttpError 403 when requesting https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=The+Ranveer+Show&type=video&order=date&publishedAfter=2026-01-01T12%3A37%3A30.960540Z&maxResults=10&regionCode=IN&key=AIzaSyBHcrCKOlHRWyUQKyY2w7-WdgAsKkc5WYE&alt=json returned "The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.". Details: "[{'message': 'The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.', 'domain': 'youtube.quota', 'reason': 'quotaExceeded'}]">
+Traceback (most recent call last):
+  File "C:\Users\erson\OneDrive\Desktop\automate youtube\youtube_automation.py", line 646, in run_daily_upload
+    winner = find_top_viral_video_from_all_channels(history)
+  File "C:\Users\erson\OneDrive\Desktop\automate youtube\youtube_automation.py", line 345, in find_top_viral_video_from_all_channels
+    raise e
+  File "C:\Users\erson\OneDrive\Desktop\automate youtube\youtube_automation.py", line 301, in find_top_viral_video_from_all_channels
+    response = search.execute()
+  File "C:\Users\erson\AppData\Local\Programs\Python\Python310\lib\site-packages\googleapiclient\_helpers.py", line 130, in positional_wrapper
+    return wrapped(*args, **kwargs)
+  File "C:\Users\erson\AppData\Local\Programs\Python\Python310\lib\site-packages\googleapiclient\http.py", line 938, in execute
+    raise HttpError(resp, content, uri=self.uri)
+googleapiclient.errors.HttpError: <HttpError 403 when requesting https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=The+Ranveer+Show&type=video&order=date&publishedAfter=2026-01-01T12%3A37%3A30.960540Z&maxResults=10&regionCode=IN&key=AIzaSyBHcrCKOlHRWyUQKyY2w7-WdgAsKkc5WYE&alt=json returned "The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.". Details: "[{'message': 'The request cannot be completed because you have exceeded your <a href="/youtube/v3/getting-started#quota">quota</a>.', 'domain': 'youtube.quota', 'reason': 'quotaExceeded'}]">
+2026-01-08 12:41:36,059 - INFO - file_cache is only supported with oauth2client<4.0.0
+2026-01-08 12:44:36,956 - INFO - "GET /?state=rcI1LdjPuTnIWfCRngxofDMvmL8GCy&code=4/0ATX87lPOHIWjY8NHyePd7nLqIJhboIcgORMk7XzJLZW9uGVt_0okkX6Wr7MEKQ6UT6wTEg&scope=https://www.googleapis.com/auth/youtube.upload HTTP/1.1" 200 65
+2026-01-08 12:44:37,783 - INFO - file_cache is only supported with oauth2client<4.0.0

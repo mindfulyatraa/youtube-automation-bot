@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout code
@@ -35,15 +37,15 @@ jobs:
         echo '${{ secrets.CLIENT_SECRETS_JSON }}' > client_secrets.json
         echo '${{ secrets.TOKEN_JSON }}' > token.json
 
-    - name: Run Automation
+    - name: Run Local Video Uploader
       run: |
-        python youtube_automation.py --run-now
+        python upload_from_folder.py --now
 
-    - name: Upload Artifacts (Logs)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: automation-logs
-        path: |
-            automation.log
-            upload_history.json
+    - name: Commit and Push Changes
+      run: |
+        git config --global user.name 'GitHub Action'
+        git config --global user.email 'action@github.com'
+        git add .
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Processed video upload [skip ci]" && git push)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
