@@ -11,6 +11,14 @@ import re
 import time
 import schedule
 import numpy as np
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename='automation.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # ==================== CONFIGURATION ====================
 YOUTUBE_API_KEY = "AIzaSyBHcrCKOlHRWyUQKyY2w7-WdgAsKkc5WYE"
@@ -646,7 +654,9 @@ def run_daily_upload():
         print("="*80 + "\n")
         
     except Exception as e:
-        print(f"\n❌ Error: {e}\n")
+        error_msg = f"Error in run_daily_upload: {str(e)}"
+        print(f"\n❌ {error_msg}\n")
+        logging.error(error_msg, exc_info=True)
 
 def main():
     print("🤖 OPUS CLIP AI - INDIAN PODCAST AUTOMATION")

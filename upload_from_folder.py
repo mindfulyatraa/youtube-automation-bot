@@ -1,8 +1,17 @@
 import schedule
 import os
 import time
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename='local_upload.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 import json
 import random
+import sys
 from datetime import datetime
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -28,41 +37,54 @@ os.makedirs(LOCAL_VIDEO_FOLDER, exist_ok=True)
 os.makedirs(COMPLETED_FOLDER, exist_ok=True)
 
 def generate_seo_from_transcript(transcript):
-    if not transcript or 'text' not in transcript:
-        return None
+    # GENERIC FALLBACKS (If no transcript or no keywords)
+    generic_titles = [
+        "Wait for it... 😱 #Shorts",
+        "You won't believe this 🔥 #Shorts",
+        "Mind Blowing Facts 🤯 #Shorts",
+        "Must Watch! ⚡ #Shorts",
+        "Best Moment Ever 💯 #Shorts",
+        "Did you know? 🤔 #Shorts",
+        "Insane Moment! 💥 #Shorts"
+    ]
 
-    full_text = transcript['text'].strip()
-    _, keywords = detect_viral_keywords(full_text)
-    
-    if keywords:
-        main_keyword = keywords[0].title()
-        templates = [
-            f"🔥 {main_keyword}! #Shorts",
-            f"This is {main_keyword} 😱 #Shorts",
-            f"Wait for it... {main_keyword} 🔥",
-            f"{main_keyword} Explained 🤯 #Shorts"
-        ]
-        title = random.choice(templates)
-    else:
-        words = full_text.split()
-        if len(words) > 5:
-            short_hook = ' '.join(words[:5]) + "..."
-            title = f"🔥 {short_hook} #Shorts"
-        else:
-            title = "Must Watch! 😱 #Shorts"
+    # Default to a random generic title first
+    title = random.choice(generic_titles)
+    desc_text = "Viral Video! Subscribe for more."
+    tags = ['shorts', 'viral', 'trending']
 
-    if len(title) > 90:
-        title = title[:87] + "..."
+    if transcript and 'text' in transcript:
+        full_text = transcript['text'].strip()
+        _, keywords = detect_viral_keywords(full_text)
+        
+        if keywords:
+            main_keyword = keywords[0].title()
+            templates = [
+                f"🔥 {main_keyword}! #Shorts",
+                f"This is {main_keyword} 😱 #Shorts",
+                f"Wait for it... {main_keyword} 🔥",
+                f"{main_keyword} Explained 🤯 #Shorts",
+                f"Why {main_keyword}? 🤔 #Shorts"
+            ]
+            title = random.choice(templates)
+            # Add specific tags from keywords
+            tags = ['shorts', 'viral', 'trending'] + keywords[:10]
+        
+        if full_text:
+            desc_text = full_text[:100] + "..."
+
+    # Ensure title fits YouTube limit
+    if len(title) > 95:
+        title = title[:90] + "..."
 
     desc = f"""🔥 VIRAL SHORTS
 
-{full_text[:100]}...
+{desc_text}
 
 Subscribe for more!
 
-#Shorts #Viral #Trending #Motivation #Facts
+#Shorts #Viral #Trending
 """
-    tags = ['shorts', 'viral', 'trending'] + (keywords[:5] if keywords else [])
     return title, desc, tags
 
 def run_scheduled_upload():
@@ -94,13 +116,8 @@ def run_scheduled_upload():
     print("   🎧 Analying audio...")
     transcript = transcribe_video(video_path)
     
-    if not transcript:
-        print("   ⚠️ Transcription failed/empty. Using defaults.")
-        title = f"Must Watch! {filename} #Shorts"
-        desc = "Viral Video! #Shorts"
-        tags = ['shorts']
-    else:
-        title, desc, tags = generate_seo_from_transcript(transcript)
+    # AI Title Generation (or Random Fallback) - NO Filenames
+    title, desc, tags = generate_seo_from_transcript(transcript)
 
     # 2. Upload
     print(f"   📤 Uploading...")
@@ -141,12 +158,26 @@ def run_scheduled_upload():
         print(f"   📂 Moved to completed folder.\n")
         
     except Exception as e:
-        print(f"   ❌ Error: {e}")
+        error_msg = f"Error in run_scheduled_upload: {str(e)}"
+        print(f"   ❌ {error_msg}")
+        logging.error(error_msg, exc_info=True)
 
 def main():
-    print("🤖 LOCAL VIDEO SCHEDULER STARTED")
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except: pass
+    
+    print("🤖 LOCAL VIDEO UPLOADER")
     print("="*50)
-    print("✅ Monitoring 'local_videos' folder")
+    print(f"📂 Folder: {LOCAL_VIDEO_FOLDER}")
+    
+    # Check for manual run
+    if len(sys.argv) > 1 and sys.argv[1] == "--now":
+        print("⚡ Manual Run Triggered! Uploading 1 video now...")
+        run_scheduled_upload()
+        print("\n✅ Manual run complete.")
+        return
+
     print("✅ Schedule: 08:00 AM & 08:00 PM")
     print("✅ Status: WAITING for next slot...")
     print("="*50)
@@ -154,9 +185,6 @@ def main():
     # Schedule
     schedule.every().day.at("08:00").do(run_scheduled_upload)
     schedule.every().day.at("20:00").do(run_scheduled_upload)
-
-    # Run once immediately ONLY if confirming (Optional, but user said "rok de" so maybe NOT run now)
-    # The user said "jab mai bolunga tab on karna". So we should just start the scheduler and let it wait.
     
     while True:
         schedule.run_pending()
