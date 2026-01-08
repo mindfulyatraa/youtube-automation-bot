@@ -677,6 +677,7 @@ def run_daily_upload():
         error_msg = f"Error in run_daily_upload: {str(e)}"
         print(f"\n❌ {error_msg}\n")
         logging.error(error_msg, exc_info=True)
+        sys.exit(1)  # Force GitHub Action to fail
 
 def main():
     print("🤖 OPUS CLIP AI - INDIAN PODCAST AUTOMATION")
