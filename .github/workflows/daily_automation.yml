@@ -3,8 +3,9 @@ name: Daily YouTube Automation
 on:
   schedule:
     # 8:00 AM IST = 02:30 UTC
+    # 10:00 AM IST = 04:30 UTC (Test slot)
     # 8:00 PM IST = 14:30 UTC
-    - cron: '30 2,14 * * *'
+    - cron: '30 2,4,14 * * *'
   workflow_dispatch: # Allows manual trigger
 
 jobs:
