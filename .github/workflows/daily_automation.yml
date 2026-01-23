@@ -37,9 +37,9 @@ jobs:
         echo '${{ secrets.CLIENT_SECRETS_JSON }}' > client_secrets.json
         echo '${{ secrets.TOKEN_JSON }}' > token.json
 
-    - name: Run Local Video Uploader
+    - name: Run Viral Channels Automation
       run: |
-        python upload_from_folder.py --now
+        python automate_viral_channels.py
 
     - name: Commit and Push Changes
       run: |
