@@ -150,19 +150,17 @@ def create_blurred_background_short(input_video, output_path, start_time, durati
     # 4. Vignette effect
     # 5. Text Overlay "WAIT FOR END"
     
-    # Font path selection
-    font_path = "arial.ttf"
-    if sys.platform != "win32":
-        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" # Common on Linux/Action runners
-        if not os.path.exists(font_path):
-             font_path = "FreeSans.ttf" # Fallback
-
-    text_cmd = (
-        f"drawtext=text='⚠️ WAIT FOR END ⚠️':fontfile='{font_path}':"
-        f"fontcolor=white:fontsize=80:x=(w-text_w)/2:y=150:"
-        f"borderw=5:bordercolor=black:shadowx=2:shadowy=2"
-    )
-
+    # FFmpeg filter for blurred background effect + effects + IMAGE overlay
+    # 1. Background: Scale to fill 1080x1920, blur
+    # 2. Foreground: Scale to fit width, add subtle saturation boost
+    # 3. Scale Overlay Image to 800px width
+    # 4. Overlay Foreground on Background
+    # 5. Vignette effect
+    # 6. Overlay Image "Wait for end" on top
+    
+    image_path = "wait_for_end.jpg"
+    # Fallback if image missing? Use text? For now assume image is there as we will commit it.
+    
     filter_complex = (
         # Background: scale, crop, blur
         f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
@@ -172,16 +170,20 @@ def create_blurred_background_short(input_video, output_path, start_time, durati
         f"[0:v]scale=1080:-2:force_original_aspect_ratio=decrease,"
         f"eq=saturation=1.2[fg];"
         
-        # Overlay -> Vignette -> Text
+        # Image: scale to 800px width
+        f"[1:v]scale=800:-1[img];"
+        
+        # Overlay -> Vignette -> Image Overlay
         f"[bg][fg]overlay=(W-w)/2:(H-h)/2,"
-        f"vignette=PI/4,"
-        f"{text_cmd}[outv]"
+        f"vignette=PI/4[comp];"
+        f"[comp][img]overlay=(W-w)/2:150[outv]"
     )
     
     cmd = [
         "ffmpeg", "-y",
         "-ss", str(start_time),
         "-i", input_video,
+        "-i", image_path, # Input 1 is the image
         "-t", str(duration),
         "-filter_complex", filter_complex,
         "-map", "[outv]",
