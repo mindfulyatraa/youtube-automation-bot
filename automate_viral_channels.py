@@ -29,18 +29,55 @@ def save_history(history):
     with open(UPLOAD_HISTORY_FILE, 'w') as f:
         json.dump(history, f, indent=2)
 
-def get_top_viral_video(channel_url, ignore_ids=[]):
+def get_latest_video(channel_url, ignore_ids=[]):
     """
-    Finds a top viral video from the channel that hasn't been processed.
-    Uses yt-dlp to list videos sorted by views.
+    Check for specific 'NEW' video from the channel (last 48 hours preferred).
     """
-    print(f"🔍 Searching for viral videos in {channel_url}...")
+    print(f"   🔍 Checking for NEW videos...")
     cmd = [
         "yt-dlp",
         "--flat-playlist",
         "--print-json",
-        "--sort", "view_count",
-        "--playlist-end", "10", # Check top 10
+        "--sort", "date", # Sort by Date (Newest first)
+        "--playlist-end", "5", # Check top 5 newest
+        channel_url
+    ]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
+        for line in result.stdout.strip().split('\n'):
+            if line:
+                try:
+                    data = json.loads(line)
+                    if data['id'] in ignore_ids:
+                        continue
+                        
+                    # Check duration (Skip shorts < 60s)
+                    dur = data.get('duration')
+                    if dur and dur < 60:
+                        continue
+                        
+                    # It's new and unprocessed
+                    print(f"   ✨ NEW VIDEO FOUND: {data.get('title')}")
+                    return data
+                except:
+                    pass
+    except Exception as e:
+        print(f"Error checking new: {e}")
+        
+    return None
+
+def get_most_viral_unprocessed(channel_url, ignore_ids=[]):
+    """
+    Fallback: Find most viral video avoiding repeats.
+    """
+    print(f"   🔍 No new video. Searching archival viral hits...")
+    cmd = [
+        "yt-dlp",
+        "--flat-playlist",
+        "--print-json",
+        "--sort", "view_count", # Most views
+        "--playlist-end", "20", # Deep search top 20
         channel_url
     ]
     
@@ -51,27 +88,36 @@ def get_top_viral_video(channel_url, ignore_ids=[]):
             if line:
                 try:
                     data = json.loads(line)
-                    print(f"   - Check: {data.get('title')} (Duration: {data.get('duration')})")
-                    # Filter out Shorts if duration is explicitly small (<60s)
-                    # If duration is missing (None), assume it is long form or check later
                     dur = data.get('duration')
                     if dur and dur < 60:
-                         continue
-                        
+                        continue
                     videos.append(data)
-                except Exception as ex:
-                    print(f"Error parsing line: {ex}")
+                except:
                     pass
         
+        # Return first one not in history
         for video in videos:
             if video['id'] not in ignore_ids:
                 return video
                 
-        return None
-        
     except Exception as e:
-        print(f"Error searching channel: {e}")
-        return None
+        print(f"Error searching viral: {e}")
+        
+    return None
+
+def get_top_viral_video(channel_url, ignore_ids=[]):
+    """
+    Hybrid Strategy:
+    1. Check NEW videos first (Immediate trend jacking).
+    2. If no new/unprocessed, get next most viral video (Evergreen content).
+    """
+    # 1. Try New
+    new_video = get_latest_video(channel_url, ignore_ids)
+    if new_video:
+        return new_video
+        
+    # 2. Try Viral Backlog
+    return get_most_viral_unprocessed(channel_url, ignore_ids)
 
 def generate_seo_metadata(channel_name, video_title, viral_clip_info):
     """
