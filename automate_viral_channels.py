@@ -14,8 +14,15 @@ CHANNELS = {
     "CarryMinati": "https://www.youtube.com/@CarryMinati",
     "Ashish Chanchlani": "https://www.youtube.com/@ashishchanchlanivines",
     "BB Ki Vines": "https://www.youtube.com/@BBKiVines",
-    "Round2Hell": "https://www.youtube.com/@Round2Hell"
+    "Round2Hell": "https://www.youtube.com/@Round2Hell",
+    "Amit Bhadana": "https://www.youtube.com/@AmitBhadana",
+    "Harsh Beniwal": "https://www.youtube.com/@harshbeniwal",
+    "Purav Jha": "https://www.youtube.com/@PuravJha"
 }
+
+# Configuration for logic
+STRICT_NEW_ONLY = ["CarryMinati"]
+DATE_CUTOFF = "20240101" # Jan 1, 2024
 
 UPLOAD_HISTORY_FILE = "upload_history.json"
 
@@ -31,15 +38,16 @@ def save_history(history):
 
 def get_latest_video(channel_url, ignore_ids=[]):
     """
-    Check for specific 'NEW' video from the channel (last 48 hours preferred).
+    Check for specific 'NEW' video from the channel (last 48 hours).
     """
-    print(f"   🔍 Checking for NEW videos...")
+    print(f"   🔍 Checking for NEW videos (Last 48 hours)...")
     cmd = [
         "yt-dlp",
         "--flat-playlist",
         "--print-json",
-        "--sort", "date", # Sort by Date (Newest first)
-        "--playlist-end", "5", # Check top 5 newest
+        "--sort", "date",
+        "--dateafter", "now-48hour", # Tiny window for breaking news
+        "--playlist-end", "3",
         channel_url
     ]
     
@@ -57,8 +65,7 @@ def get_latest_video(channel_url, ignore_ids=[]):
                     if dur and dur < 60:
                         continue
                         
-                    # It's new and unprocessed
-                    print(f"   ✨ NEW VIDEO FOUND: {data.get('title')}")
+                    print(f"   🚨 NEW DROP DETECTED: {data.get('title')}")
                     return data
                 except:
                     pass
@@ -67,17 +74,18 @@ def get_latest_video(channel_url, ignore_ids=[]):
         
     return None
 
-def get_most_viral_unprocessed(channel_url, ignore_ids=[]):
+def get_recent_viral_video(channel_url, ignore_ids=[]):
     """
-    Fallback: Find most viral video avoiding repeats.
+    Fallback: Most viral videos AFTER Jan 1, 2024 (Not too old).
     """
-    print(f"   🔍 No new video. Searching archival viral hits...")
+    print(f"   🔍 Finding recent hits (After {DATE_CUTOFF})...")
     cmd = [
         "yt-dlp",
         "--flat-playlist",
         "--print-json",
-        "--sort", "view_count", # Most views
-        "--playlist-end", "20", # Deep search top 20
+        "--sort", "view_count",
+        "--dateafter", DATE_CUTOFF, # Only recent years
+        "--playlist-end", "20",
         channel_url
     ]
     
@@ -95,29 +103,35 @@ def get_most_viral_unprocessed(channel_url, ignore_ids=[]):
                 except:
                     pass
         
-        # Return first one not in history
         for video in videos:
             if video['id'] not in ignore_ids:
                 return video
                 
     except Exception as e:
-        print(f"Error searching viral: {e}")
+        print(f"Error searching recent viral: {e}")
         
     return None
 
-def get_top_viral_video(channel_url, ignore_ids=[]):
+def get_video_for_channel(channel_name, channel_url, ignore_ids=[]):
     """
-    Hybrid Strategy:
-    1. Check NEW videos first (Immediate trend jacking).
-    2. If no new/unprocessed, get next most viral video (Evergreen content).
+    Intelligent Selection Logic:
+    1. Priority: Breaking News (New upload last 48h) matched for ALL.
+    2. Fallback:
+       - CarryMinati: STOP (Strict New Only).
+       - Others: Viral Hits after 2024.
     """
-    # 1. Try New
+    # 1. Check New
     new_video = get_latest_video(channel_url, ignore_ids)
     if new_video:
         return new_video
         
-    # 2. Try Viral Backlog
-    return get_most_viral_unprocessed(channel_url, ignore_ids)
+    # 2. Apply Custom Rules
+    if channel_name in STRICT_NEW_ONLY:
+        print(f"   ⚠️ 'Strict New Only' active for {channel_name}. No new video found -> Skipping.")
+        return None
+        
+    # 3. Fallback to Recent Viral
+    return get_recent_viral_video(channel_url, ignore_ids)
 
 def generate_seo_metadata(channel_name, video_title, viral_clip_info):
     """
@@ -242,7 +256,7 @@ def main():
     print(f"🎯 Target Channel: {channel_name}")
     
     # 1. Find Video
-    video = get_top_viral_video(channel_url, processed_ids)
+    video = get_video_for_channel(channel_name, channel_url, processed_ids)
     
     if not video:
         print("❌ No suitable new video found.")
