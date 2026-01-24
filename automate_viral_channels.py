@@ -76,15 +76,16 @@ def get_latest_video(channel_url, ignore_ids=[]):
 
 def get_recent_viral_video(channel_url, ignore_ids=[]):
     """
-    Fallback: Most viral videos AFTER Jan 1, 2024 (Not too old).
+    Fallback: Most viral videos. First tries recent (After jan 2024), then All Time.
     """
+    # 1. Try Recent Viral First
     print(f"   🔍 Finding recent hits (After {DATE_CUTOFF})...")
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "--flat-playlist",
         "--print-json",
         "--sort", "view_count",
-        "--dateafter", DATE_CUTOFF, # Only recent years
+        "--dateafter", DATE_CUTOFF, 
         "--playlist-end", "20",
         channel_url
     ]
@@ -109,7 +110,35 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
                 
     except Exception as e:
         print(f"Error searching recent viral: {e}")
-        
+
+    # 2. Fallback: All Time Viral (If no recent found)
+    print(f"   ⚠️ No recent viral hits found. Searching ALL TIME viral...")
+    cmd_fallback = [
+        sys.executable, "-m", "yt_dlp",
+        "--flat-playlist",
+        "--print-json",
+        "--sort", "view_count",
+        "--playlist-end", "20",
+        channel_url
+    ]
+    
+    try:
+        result = subprocess.run(cmd_fallback, capture_output=True, text=True, encoding='utf-8')
+        for line in result.stdout.strip().split('\n'):
+            if line:
+                try:
+                    data = json.loads(line)
+                    dur = data.get('duration')
+                    if dur and dur < 60:
+                        continue
+                    if data['id'] not in ignore_ids:
+                        print(f"   ✅ Found All-Time Viral hit: {data.get('title')}")
+                        return data
+                except:
+                    pass
+    except Exception as e:
+        print(f"Error searching all-time viral: {e}")
+
     return None
 
 def get_video_for_channel(channel_name, channel_url, ignore_ids=[]):
