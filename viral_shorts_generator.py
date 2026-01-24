@@ -57,12 +57,18 @@ def download_video(url, output_folder):
         sys.executable, "-m", "yt_dlp",
         "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
         "--merge-output-format", "mp4",
-        "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
-        "--extractor-args", "youtube:player_client=ios",
-        "--no-check-certificate",
+        "--extractor-args", "youtube:player_client=tv",
+        "--force-ipv4",
         "-o", output_path,
-        url
     ]
+    
+    # Check for cookies.txt
+    if os.path.exists('cookies.txt'):
+        print("   🍪 Using cookies.txt for authentication")
+        cmd.insert(-1, "--cookies")
+        cmd.insert(-1, "cookies.txt")
+    
+    cmd.append(url)
     
     max_retries = 3
     for attempt in range(max_retries):
