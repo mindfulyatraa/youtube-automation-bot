@@ -272,7 +272,7 @@ def main():
     
     if not video:
         print("❌ No suitable new video found in ANY channel.")
-        return
+        sys.exit(1)
         
     print(f"✅ Found Viral Video: {video.get('title')} ({video.get('view_count', 0)} views)")
     video_url = f"https://www.youtube.com/watch?v={video['id']}"
@@ -283,7 +283,7 @@ def main():
     
     if not shorts:
         print("❌ Failed to generate shorts.")
-        return
+        sys.exit(1)
 
     # 3. Optimize & Prepare for Upload
     selected_short = shorts[0]
@@ -321,8 +321,10 @@ def main():
             
         except Exception as e:
             print(f"❌ Upload Failed: {e}")
+            sys.exit(1)
     else:
         print("❌ Authentication failed, strictly skipping upload.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
