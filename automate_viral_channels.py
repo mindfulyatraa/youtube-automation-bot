@@ -4,7 +4,7 @@ import subprocess
 import sys
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Import core generation logic (ensure this is in the same directory)
 from viral_shorts_generator import process_video, get_video_id
@@ -41,12 +41,16 @@ def get_latest_video(channel_url, ignore_ids=[]):
     Check for specific 'NEW' video from the channel (last 48 hours).
     """
     print(f"   🔍 Checking for NEW videos (Last 48 hours)...")
+    # Calculate 48 hours ago date string YYYYMMDD
+    two_days_ago = (datetime.now() - timedelta(days=2)).strftime('%Y%m%d')
+    
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "--flat-playlist",
         "--print-json",
-        "--dateafter", "now-48hour", # Tiny window for breaking news
-        "--playlist-end", "3",
+        "--dateafter", two_days_ago, 
+        "--playlist-end", "5",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
         channel_url
     ]
     
@@ -87,6 +91,7 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
         "--print-json",
         "--dateafter", DATE_CUTOFF, # Only recent years
         "--playlist-end", "20",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
         channel_url
     ]
     
@@ -124,6 +129,7 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
         "--flat-playlist",
         "--print-json",
         "--playlist-end", "50", # Fetch more to find a hit
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
         channel_url
     ]
     
