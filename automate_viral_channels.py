@@ -251,15 +251,27 @@ def main():
     print("🤖 AUTO-VIRAL CHANNELS BOT")
     print("=" * 60)
     
-    # Pick a random channel to process this run
-    channel_name, channel_url = random.choice(list(CHANNELS.items()))
-    print(f"🎯 Target Channel: {channel_name}")
+    # Shuffle channels to try random order, but try ALL until one works
+    channel_items = list(CHANNELS.items())
+    random.shuffle(channel_items)
     
-    # 1. Find Video
-    video = get_video_for_channel(channel_name, channel_url, processed_ids)
+    video = None
+    selected_channel_name = None
+    
+    for name, url in channel_items:
+        print(f"🎯 Checking Target Channel: {name}")
+        candidate_video = get_video_for_channel(name, url, processed_ids)
+        
+        if candidate_video:
+            video = candidate_video
+            channel_name = name # Update the main channel_name variable
+            channel_url = url
+            break
+        else:
+            print(f"   ⚠️ No suitable video found for {name}, trying next...")
     
     if not video:
-        print("❌ No suitable new video found.")
+        print("❌ No suitable new video found in ANY channel.")
         return
         
     print(f"✅ Found Viral Video: {video.get('title')} ({video.get('view_count', 0)} views)")
