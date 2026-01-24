@@ -33,3 +33,5 @@ googleapiclient.errors.HttpError: <HttpError 403 when requesting https://youtube
 2026-01-08 12:44:37,783 - INFO - file_cache is only supported with oauth2client<4.0.0
 2026-01-23 16:05:10,847 - INFO - file_cache is only supported with oauth2client<4.0.0
 2026-01-23 16:06:49,491 - INFO - file_cache is only supported with oauth2client<4.0.0
+2026-01-23 16:23:28,306 - INFO - file_cache is only supported with oauth2client<4.0.0
+2026-01-24 20:20:41,861 - INFO - file_cache is only supported with oauth2client<4.0.0

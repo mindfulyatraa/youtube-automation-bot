@@ -1,0 +1,25 @@
+{
+  "source_url": "https://youtu.be/5pNLh11iTBM",
+  "video_id": "5pNLh11iTBM",
+  "total_clips": 3,
+  "clips": [
+    {
+      "path": "shorts\\carryminati_5pNLh11iTBM\\short_1_t86s.mp4",
+      "start_time": 86.75777777777779,
+      "duration": 50,
+      "viral_score": 8.5
+    },
+    {
+      "path": "shorts\\carryminati_5pNLh11iTBM\\short_2_t257s.mp4",
+      "start_time": 257.0311111111111,
+      "duration": 50,
+      "viral_score": 8.3
+    },
+    {
+      "path": "shorts\\carryminati_5pNLh11iTBM\\short_3_t427s.mp4",
+      "start_time": 427.30444444444447,
+      "duration": 50,
+      "viral_score": 8.1
+    }
+  ]
+}

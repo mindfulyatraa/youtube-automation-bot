@@ -55,18 +55,10 @@ def download_video(url, output_folder):
     print(f"📥 Downloading video: {url}")
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
         "--merge-output-format", "mp4",
-        "--extractor-args", "youtube:player_client=tv",
-        "--force-ipv4",
+        "-o", output_path,
+        url
     ]
-    
-    # Check for cookies.txt
-    if os.path.exists('cookies.txt'):
-        print("   🍪 Using cookies.txt for authentication")
-        cmd.extend(["--cookies", "cookies.txt"])
-    
-    cmd.extend(["-o", output_path, url])
     
     max_retries = 3
     for attempt in range(max_retries):
