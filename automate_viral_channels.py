@@ -45,7 +45,6 @@ def get_latest_video(channel_url, ignore_ids=[]):
         sys.executable, "-m", "yt_dlp",
         "--flat-playlist",
         "--print-json",
-        "--sort", "date",
         "--dateafter", "now-48hour", # Tiny window for breaking news
         "--playlist-end", "3",
         channel_url
@@ -86,8 +85,7 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
         sys.executable, "-m", "yt_dlp",
         "--flat-playlist",
         "--print-json",
-        "--sort", "view_count",
-        "--dateafter", DATE_CUTOFF, 
+        "--dateafter", DATE_CUTOFF, # Only recent years
         "--playlist-end", "20",
         channel_url
     ]
@@ -109,6 +107,9 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
                 except:
                     pass
         
+        # Sort specific to Recent search
+        videos.sort(key=lambda x: x.get('view_count', 0), reverse=True)
+        
         for video in videos:
             if video['id'] not in ignore_ids:
                 return video
@@ -122,8 +123,7 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
         sys.executable, "-m", "yt_dlp",
         "--flat-playlist",
         "--print-json",
-        "--sort", "view_count",
-        "--playlist-end", "20",
+        "--playlist-end", "50", # Fetch more to find a hit
         channel_url
     ]
     
@@ -132,6 +132,7 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
         print(f"   [DEBUG] Fallback Search - RC: {result.returncode}, Output Len: {len(result.stdout)}")
         if result.stderr: print(f"   [DEBUG] STDERR: {result.stderr[:200]}")
         
+        fallback_videos = []
         for line in result.stdout.strip().split('\n'):
             if line:
                 try:
@@ -140,10 +141,17 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
                     if dur and dur < 60:
                         continue
                     if data['id'] not in ignore_ids:
-                        print(f"   ✅ Found All-Time Viral hit: {data.get('title')}")
-                        return data
+                        fallback_videos.append(data)
                 except:
                     pass
+        
+        # Sort fallback videos by views too
+        if fallback_videos:
+            fallback_videos.sort(key=lambda x: x.get('view_count', 0), reverse=True)
+            best_video = fallback_videos[0]
+            print(f"   ✅ Found All-Time Viral hit: {best_video.get('title')} ({best_video.get('view_count')} views)")
+            return best_video
+            
     except Exception as e:
         print(f"Error searching all-time viral: {e}")
 
