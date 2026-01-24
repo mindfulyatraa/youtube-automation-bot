@@ -57,19 +57,27 @@ def download_video(url, output_folder):
         sys.executable, "-m", "yt_dlp",
         "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
         "--merge-output-format", "mp4",
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "--extractor-args", "youtube:player_client=android",
+        "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+        "--extractor-args", "youtube:player_client=ios",
+        "--no-check-certificate",
         "-o", output_path,
         url
     ]
     
-    try:
-        subprocess.run(cmd, check=True)
-        print(f"✓ Downloaded: {output_path}")
-        return output_path
-    except subprocess.CalledProcessError as e:
-        print(f"✗ Download failed: {e}")
-        return None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            print(f"   ⏳ Attempt {attempt+1}/{max_retries}...")
+            subprocess.run(cmd, check=True)
+            print(f"✓ Downloaded: {output_path}")
+            return output_path
+        except subprocess.CalledProcessError as e:
+            print(f"   ✗ Attempt {attempt+1} failed: {e}")
+            import time
+            time.sleep(10 * (attempt + 1)) # Wait 10s, 20s, etc.
+    
+    print("✗ All download attempts failed.")
+    return None
 
 def get_video_duration(video_path):
     """Get video duration in seconds using ffmpeg (since ffprobe might be missing)"""
