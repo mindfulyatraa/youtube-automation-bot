@@ -1,0 +1,23 @@
+services:
+  - type: cron
+    name: youtube-viral-automation
+    env: python
+    # Schedule: Every day at 2:30 AM and 2:30 PM UTC (8:00 AM and 8:00 PM IST)
+    schedule: "30 2,14 * * *"
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: python automate_viral_channels.py
+    
+    # Environment variables (add these in Render dashboard)
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: TZ
+        value: "Asia/Kolkata"
+    
+    # Auto-deploy on push to main branch
+    autoDeploy: true
+    
+    # Region (choose closest to India for better speed)
+    region: singapore

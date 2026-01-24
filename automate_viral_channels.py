@@ -6,6 +6,10 @@ import random
 import time
 from datetime import datetime, timedelta
 
+# Setup credentials from environment variables (for Render.com)
+from setup_env import setup_credentials_from_env
+setup_credentials_from_env()
+
 # Import core generation logic (ensure this is in the same directory)
 from viral_shorts_generator import process_video, get_video_id
 
