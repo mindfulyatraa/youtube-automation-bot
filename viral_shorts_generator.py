@@ -54,7 +54,7 @@ def download_video(url, output_folder):
     
     print(f"📥 Downloading video: {url}")
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
         "--merge-output-format", "mp4",
         "-o", output_path,

@@ -42,7 +42,7 @@ def get_latest_video(channel_url, ignore_ids=[]):
     """
     print(f"   🔍 Checking for NEW videos (Last 48 hours)...")
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "--flat-playlist",
         "--print-json",
         "--sort", "date",
@@ -80,7 +80,7 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
     """
     print(f"   🔍 Finding recent hits (After {DATE_CUTOFF})...")
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "--flat-playlist",
         "--print-json",
         "--sort", "view_count",
