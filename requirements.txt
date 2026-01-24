@@ -1,7 +1,7 @@
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
-yt-dlp
+yt-dlp @ git+https://github.com/yt-dlp/yt-dlp.git@master
 schedule
 moviepy
 openai-whisper
