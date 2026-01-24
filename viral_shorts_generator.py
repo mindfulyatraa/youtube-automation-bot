@@ -57,7 +57,8 @@ def download_video(url, output_folder):
         sys.executable, "-m", "yt_dlp",
         "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
         "--merge-output-format", "mp4",
-        "--extractor-args", "youtube:player_client=tv",
+        "--user-agent", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "--extractor-args", "youtube:player_client=web",
         "--force-ipv4",
         "-o", output_path,
     ]
