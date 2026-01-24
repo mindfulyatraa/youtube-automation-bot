@@ -302,31 +302,20 @@ def main():
     print("🤖 AUTO-VIRAL CHANNELS BOT")
     print("=" * 60)
     
-    # Shuffle channels to try random order, but try ALL until one works
-    channel_items = list(CHANNELS.items())
-    random.shuffle(channel_items)
+    # MANUAL OVERRIDE: Process specific video requested by user
+    # video_url = "https://youtu.be/5pNLh11iTBM"
+    # Channel ID for CarryMinati found from URL context or Hardcoded
+    channel_name = "CarryMinati" 
     
-    video = None
-    selected_channel_name = None
+    # Mock video object for metadata
+    video = {
+        'id': '5pNLh11iTBM',
+        'title': 'Manual Override Video', # Title will be fetched by yt-dlp anyway or can be hardcoded if known
+        'view_count': 0
+    }
     
-    for name, url in channel_items:
-        print(f"🎯 Checking Target Channel: {name}")
-        candidate_video = get_video_for_channel(name, url, processed_ids)
-        
-        if candidate_video:
-            video = candidate_video
-            channel_name = name # Update the main channel_name variable
-            channel_url = url
-            break
-        else:
-            print(f"   ⚠️ No suitable video found for {name}, trying next...")
-    
-    if not video:
-        print("❌ No suitable new video found in ANY channel.")
-        sys.exit(1)
-        
-    print(f"✅ Found Viral Video: {video.get('title')} ({video.get('view_count', 0)} views)")
-    video_url = f"https://www.youtube.com/watch?v={video['id']}"
+    print(f"🎯 MANUAL MODE: Processing specific video {video['id']}")
+    video_url = "https://youtu.be/5pNLh11iTBM"
     
     # 2. Process Video (Generate Shorts)
     # Generate 3 shorts
