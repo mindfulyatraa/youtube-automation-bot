@@ -53,6 +53,8 @@ def get_latest_video(channel_url, ignore_ids=[]):
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
+        print(f"   [DEBUG] New Video Search - RC: {result.returncode}, Output Len: {len(result.stdout)}")
+        if result.stderr: print(f"   [DEBUG] STDERR: {result.stderr[:200]}")
         for line in result.stdout.strip().split('\n'):
             if line:
                 try:
@@ -92,6 +94,9 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
+        print(f"   [DEBUG] Recent Search - RC: {result.returncode}, Output Len: {len(result.stdout)}")
+        if result.stderr: print(f"   [DEBUG] STDERR: {result.stderr[:200]}")
+        
         videos = []
         for line in result.stdout.strip().split('\n'):
             if line:
@@ -124,6 +129,9 @@ def get_recent_viral_video(channel_url, ignore_ids=[]):
     
     try:
         result = subprocess.run(cmd_fallback, capture_output=True, text=True, encoding='utf-8')
+        print(f"   [DEBUG] Fallback Search - RC: {result.returncode}, Output Len: {len(result.stdout)}")
+        if result.stderr: print(f"   [DEBUG] STDERR: {result.stderr[:200]}")
+        
         for line in result.stdout.strip().split('\n'):
             if line:
                 try:
