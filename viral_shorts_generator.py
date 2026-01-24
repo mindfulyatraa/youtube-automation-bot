@@ -57,19 +57,15 @@ def download_video(url, output_folder):
         sys.executable, "-m", "yt_dlp",
         "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
         "--merge-output-format", "mp4",
-        "--user-agent", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-        "--extractor-args", "youtube:player_client=web",
         "--force-ipv4",
-        "-o", output_path,
     ]
     
     # Check for cookies.txt
     if os.path.exists('cookies.txt'):
         print("   🍪 Using cookies.txt for authentication")
-        cmd.insert(-1, "--cookies")
-        cmd.insert(-1, "cookies.txt")
+        cmd.extend(["--cookies", "cookies.txt"])
     
-    cmd.append(url)
+    cmd.extend(["-o", output_path, url])
     
     max_retries = 3
     for attempt in range(max_retries):
