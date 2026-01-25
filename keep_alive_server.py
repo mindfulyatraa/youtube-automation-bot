@@ -18,7 +18,10 @@ app = Flask(__name__)
 last_run_status = {
     "last_run": None,
     "status": "Not started yet",
-    "next_run": None
+    "next_run": None,
+    "error_log": None,
+    "output_log": None,
+    "progress": None
 }
 
 def run_automation():
@@ -30,10 +33,15 @@ def run_automation():
     print(f"{'='*60}\n")
     
     last_run_status["last_run"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    last_run_status["status"] = "Running..."
+    last_run_status["status"] = "🔄 Running..."
+    last_run_status["progress"] = "Starting automation..."
+    last_run_status["error_log"] = None
+    last_run_status["output_log"] = None
     
     try:
         # Run the automation script
+        last_run_status["progress"] = "Executing script..."
+        
         result = subprocess.run(
             [sys.executable, "automate_viral_channels.py"],
             capture_output=True,
@@ -41,19 +49,30 @@ def run_automation():
             timeout=3600  # 1 hour timeout
         )
         
+        # Store output logs
+        last_run_status["output_log"] = result.stdout[-2000:] if result.stdout else "No output"
+        
         if result.returncode == 0:
             last_run_status["status"] = "✅ Success"
+            last_run_status["progress"] = "Completed successfully!"
+            last_run_status["error_log"] = None
             print("\n✅ Automation completed successfully!")
         else:
             last_run_status["status"] = f"❌ Failed (exit code {result.returncode})"
+            last_run_status["progress"] = "Failed - check error log below"
+            last_run_status["error_log"] = result.stderr[-2000:] if result.stderr else "No error details available"
             print(f"\n❌ Automation failed with exit code {result.returncode}")
             print(f"Error: {result.stderr}")
             
     except subprocess.TimeoutExpired:
         last_run_status["status"] = "⏱️ Timeout (>1 hour)"
+        last_run_status["progress"] = "Timed out after 1 hour"
+        last_run_status["error_log"] = "Process exceeded 1 hour timeout limit"
         print("\n⏱️ Automation timed out after 1 hour")
     except Exception as e:
         last_run_status["status"] = f"❌ Error: {str(e)}"
+        last_run_status["progress"] = "Exception occurred"
+        last_run_status["error_log"] = str(e)
         print(f"\n❌ Error running automation: {e}")
     
     print(f"\n{'='*60}")
@@ -96,18 +115,56 @@ def schedule_jobs():
 @app.route('/')
 def home():
     """Health check endpoint"""
+    
+    # Determine status color
+    status_class = 'success' if '✅' in last_run_status['status'] else 'error' if '❌' in last_run_status['status'] else 'running'
+    
+    # Build error log section
+    error_section = ""
+    if last_run_status.get('error_log'):
+        error_section = f"""
+            <details open>
+                <summary style="cursor: pointer; font-weight: bold; color: #721c24; padding: 10px; background: #f8d7da; border-radius: 5px; margin: 10px 0;">
+                    ❌ Error Details (Click to expand/collapse)
+                </summary>
+                <pre style="background: #f8d7da; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">{last_run_status['error_log']}</pre>
+            </details>
+        """
+    
+    # Build output log section
+    output_section = ""
+    if last_run_status.get('output_log'):
+        output_section = f"""
+            <details>
+                <summary style="cursor: pointer; font-weight: bold; color: #0c5460; padding: 10px; background: #d1ecf1; border-radius: 5px; margin: 10px 0;">
+                    📋 Output Log (Click to expand/collapse)
+                </summary>
+                <pre style="background: #d1ecf1; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">{last_run_status['output_log']}</pre>
+            </details>
+        """
+    
+    # Build progress section
+    progress_section = ""
+    if last_run_status.get('progress'):
+        progress_class = 'running' if '🔄' in last_run_status['status'] else 'info'
+        progress_section = f"""
+            <div class="status {progress_class}">
+                <strong>Progress:</strong> {last_run_status['progress']}
+            </div>
+        """
+    
     return f"""
     <html>
     <head>
         <title>YouTube Automation Bot</title>
-        <meta http-equiv="refresh" content="30">
+        <meta http-equiv="refresh" content="10">
         <style>
             body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
-            .container {{ background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 800px; margin: 40px auto; }}
+            .container {{ background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 900px; margin: 40px auto; }}
             h1 {{ color: #333; }}
             .status {{ padding: 15px; margin: 10px 0; border-radius: 5px; }}
             .success {{ background: #d4edda; color: #155724; }}
-            .running {{ background: #fff3cd; color: #856404; }}
+            .running {{ background: #fff3cd; color: #856404; animation: pulse 2s infinite; }}
             .error {{ background: #f8d7da; color: #721c24; }}
             .info {{ background: #d1ecf1; color: #0c5460; }}
             code {{ background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }}
@@ -128,6 +185,12 @@ def home():
             .test-button:hover {{ background: #218838; }}
             .button-container {{ text-align: center; margin: 30px 0; }}
             .warning {{ background: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107; }}
+            @keyframes pulse {{
+                0%, 100% {{ opacity: 1; }}
+                50% {{ opacity: 0.7; }}
+            }}
+            details {{ margin: 15px 0; }}
+            summary {{ margin-bottom: 10px; }}
         </style>
     </head>
     <body>
@@ -142,9 +205,15 @@ def home():
                 <strong>Last Run:</strong> {last_run_status['last_run'] or 'Never'}
             </div>
             
-            <div class="status {'success' if '✅' in last_run_status['status'] else 'error' if '❌' in last_run_status['status'] else 'running'}">
+            {progress_section}
+            
+            <div class="status {status_class}">
                 <strong>Last Status:</strong> {last_run_status['status']}
             </div>
+            
+            {error_section}
+            
+            {output_section}
             
             <div class="status info">
                 <strong>Next Scheduled Run:</strong> {last_run_status['next_run'] or 'Calculating...'}
@@ -158,7 +227,7 @@ def home():
             
             <div class="warning">
                 <strong>⚠️ Note:</strong> Test run may take 10-15 minutes to complete. 
-                The page will auto-refresh to show progress. Check "Last Status" for results.
+                The page will auto-refresh every 10 seconds to show live progress. Check logs above for details.
             </div>
             
             <hr>
@@ -169,7 +238,7 @@ def home():
                 <li>8:00 PM IST (2:30 PM UTC)</li>
             </ul>
             
-            <p><em>Page auto-refreshes every 30 seconds</em></p>
+            <p><em>Page auto-refreshes every 10 seconds</em></p>
         </div>
     </body>
     </html>
