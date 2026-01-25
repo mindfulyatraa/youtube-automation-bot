@@ -5,6 +5,9 @@ services:
     # Schedule: Every day at 2:30 AM and 2:30 PM UTC (8:00 AM and 8:00 PM IST)
     schedule: "30 2,14 * * *"
     buildCommand: |
+      # Install Node.js for yt-dlp JavaScript runtime
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      apt-get install -y nodejs
       pip install --upgrade pip
       pip install -r requirements.txt
     startCommand: python automate_viral_channels.py
