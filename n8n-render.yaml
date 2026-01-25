@@ -1,0 +1,40 @@
+services:
+  # N8n Workflow Automation Service
+  - type: web
+    name: n8n-automation
+    env: node
+    region: singapore
+    plan: free
+    
+    buildCommand: npm install -g n8n
+    
+    startCommand: n8n start
+    
+    envVars:
+      - key: N8N_BASIC_AUTH_ACTIVE
+        value: "true"
+      - key: N8N_BASIC_AUTH_USER
+        sync: false  # Set in Render dashboard
+      - key: N8N_BASIC_AUTH_PASSWORD
+        sync: false  # Set in Render dashboard
+      - key: N8N_HOST
+        value: "0.0.0.0"
+      - key: N8N_PORT
+        value: "10000"
+      - key: N8N_PROTOCOL
+        value: "https"
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: n8n-automation
+          property: host
+      - key: GENERIC_TIMEZONE
+        value: "Asia/Kolkata"
+      - key: TZ
+        value: "Asia/Kolkata"
+    
+    # Persistent disk for workflows and data
+    disk:
+      name: n8n-data
+      mountPath: /root/.n8n
+      sizeGB: 1
